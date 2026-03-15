@@ -72,9 +72,7 @@ cat > "$API_DIR/.env" <<'ENVEOF'
 COPERNICUS_USERNAME=berrymappemonde@gmail.com
 COPERNICUS_PASSWORD=Hackmyroute2027$
 PORT=8000
-# ── Agents IA simulation — Anthropic Claude (obligatoire pour les agents) ─
-# Renseigner ANTHROPIC_API_KEY pour activer les 4 agents IA en mode simulation.
-# Sans cette clé, les agents affichent un contenu de fallback statique.
+# ANTHROPIC_API_KEY : mettre dans naviguide_workspace/.env (fallback quand Bedrock bloqué)
 ANTHROPIC_API_KEY=
 # Modèle optionnel (défaut : claude-opus-4-5)
 ANTHROPIC_MODEL=claude-opus-4-5

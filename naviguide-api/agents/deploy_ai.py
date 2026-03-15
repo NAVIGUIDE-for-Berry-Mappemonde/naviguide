@@ -16,11 +16,11 @@ from typing import AsyncIterator, Tuple
 
 from dotenv import load_dotenv
 
-# Add naviguide_workspace to path and load its .env (AWS_BEARER_TOKEN_BEDROCK)
+# Add naviguide_workspace to path and load its .env (override API .env for ANTHROPIC_API_KEY)
 _WS = Path(__file__).resolve().parents[2] / "naviguide_workspace"
 if str(_WS) not in sys.path:
     sys.path.insert(0, str(_WS))
-load_dotenv(_WS / ".env")
+load_dotenv(_WS / ".env", override=True)
 
 
 def call_llm(prompt: str, system: str = "") -> Tuple[str, str]:

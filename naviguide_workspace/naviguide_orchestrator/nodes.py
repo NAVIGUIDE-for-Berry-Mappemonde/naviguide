@@ -604,3 +604,58 @@ def generate_expedition_plan_node(state: OrchestratorState) -> OrchestratorState
         "status":          "complete",
         "messages":        [msg],
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# NODE 6 — degraded_plan (when Agent 1 fails)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def degraded_plan_node(state: OrchestratorState) -> OrchestratorState:
+    """
+    Build minimal expedition_plan with fallback briefing when Agent 1 fails.
+    Ensures the frontend always receives a plan with a usable briefing.
+    """
+    waypoints     = state.get("waypoints", [])
+    language      = state.get("language", "en")
+    waypoint_count = len(waypoints) or 45
+    # Rough estimate: ~800 nm per leg for world circumnavigation
+    total_nm      = max(waypoint_count * 800, 36000)
+
+    briefing = _build_fallback_briefing(
+        risk_level="UNKNOWN",
+        critical_alerts=[],
+        total_nm=total_nm,
+        waypoint_count=waypoint_count,
+        sorted_matrix=[],
+        isolated_medical=[],
+        language=language,
+    )
+
+    expedition_plan = {
+        "executive_briefing": briefing,
+        "voyage_statistics": {
+            "total_distance_nm":     total_nm,
+            "total_segments":        max(0, waypoint_count - 1),
+            "expedition_risk_level": "UNKNOWN",
+            "overall_expedition_risk": 0.0,
+            "anti_shipping_avg":     0.0,
+            "high_risk_count":       0,
+            "critical_count":        0,
+        },
+        "critical_alerts": [],
+        "unified_geojson": {
+            "type": "FeatureCollection",
+            "metadata": {"expedition_name": "Berry-Mappemonde", "source": "NAVIGUIDE (degraded)"},
+            "features": [],
+        },
+        "full_route_intelligence": {"status": "failed", "metadata": {}},
+        "full_risk_assessment": {"status": "skipped", "metadata": {}},
+    }
+
+    log.warning("[orchestrator] Agent 1 failed — returning degraded plan with fallback briefing")
+    return {
+        **state,
+        "expedition_plan": expedition_plan,
+        "status":          "complete",
+        "messages":        [AIMessage(content="[degraded] Fallback briefing generated (Agent 1 unavailable).")],
+    }

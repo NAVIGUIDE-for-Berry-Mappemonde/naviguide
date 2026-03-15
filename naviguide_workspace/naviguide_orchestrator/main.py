@@ -248,10 +248,11 @@ async def plan_berry_mappemonde(body: BerryPlanRequest = None):
 
     try:
         result = orchestrator.invoke(state)
-        log.info(f"Berry-Mappemonde complete: status={result['status']}, risk={result['expedition_risk_level']}")
+        plan = result.get("expedition_plan") or {}
+        log.info(f"Berry-Mappemonde complete: status={result.get('status')}, risk={result.get('expedition_risk_level', 'N/A')}")
         return {
-            "status":          result["status"],
-            "expedition_plan": result["expedition_plan"],
+            "status":          result.get("status", "complete"),
+            "expedition_plan": plan,
             "errors":          result.get("errors", []),
         }
     except Exception as exc:

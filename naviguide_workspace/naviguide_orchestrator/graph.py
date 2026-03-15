@@ -12,6 +12,7 @@ from .nodes import (
     run_risk_assessment_node,
     llm_expedition_briefing_node,
     generate_expedition_plan_node,
+    degraded_plan_node,
 )
 
 
@@ -45,6 +46,7 @@ def build_orchestrator():
     graph.add_node("agent3",         run_risk_assessment_node)
     graph.add_node("briefing",       llm_expedition_briefing_node)
     graph.add_node("generate_plan",  generate_expedition_plan_node)
+    graph.add_node("degraded_plan",  degraded_plan_node)
 
     # Entry point
     graph.set_entry_point("validate")
@@ -56,12 +58,15 @@ def build_orchestrator():
         {"error": END, "ok": "agent1"},
     )
 
-    # Conditional: abort if Agent 1 completely failed
+    # Conditional: Agent 1 failed → degraded plan with fallback briefing; else → Agent 3
     graph.add_conditional_edges(
         "agent1",
         _after_agent1,
-        {"failed": END, "ok": "agent3"},
+        {"failed": "degraded_plan", "ok": "agent3"},
     )
+
+    # Degraded plan goes to END (skip Agent 3 + briefing, we already have fallback)
+    graph.add_edge("degraded_plan", END)
 
     # Linear continuation
     graph.add_edge("agent3",        "briefing")
