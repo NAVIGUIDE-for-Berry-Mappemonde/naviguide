@@ -294,3 +294,5 @@ Private — Berry-Mappemonde Expedition / NAVIGUIDE Project.
 ---
 
 *Built for the Berry-Mappemonde circumnavigation — La Rochelle → the world → La Rochelle.*
+
+**GitLab AI Hackathon:** for template onboarding, see the [onboarding issue](../../work_items/1) in this GitLab project.
