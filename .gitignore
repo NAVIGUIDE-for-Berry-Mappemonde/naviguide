@@ -30,8 +30,9 @@ __pycache__/
 **/__pycache__/
 *.pyc
 
-# Polar data (runtime)
-naviguide_workspace/polar_data/
+# Polar data (runtime) — version Berry-Mappemonde for judges / demo
+naviguide_workspace/polar_data/*
+!naviguide_workspace/polar_data/polar_berry-mappemonde-2026.json
 
 # Geospatial data (large files)
 data/gebco/*.nc

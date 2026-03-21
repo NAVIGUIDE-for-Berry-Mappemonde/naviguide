@@ -67,7 +67,9 @@ fi
 # ── Service 1: naviguide-api (port 8000) ──────────────────────────────────────
 info "Starting naviguide-api on :8000..."
 API_DIR="$PROJECT_ROOT/naviguide-api"
-# Always write the API .env to ensure correct credentials and port
+# Always write the API .env to ensure correct credentials and port.
+# GEMINI_API_KEY / GEMINI_MODEL / GEMINI_SECRET_RESOURCE : uniquement dans
+# naviguide_workspace/.env (main.py les charge ensuite sans les dupliquer ici).
 cat > "$API_DIR/.env" <<'ENVEOF'
 COPERNICUS_USERNAME=berrymappemonde@gmail.com
 COPERNICUS_PASSWORD=Hackmyroute2027$

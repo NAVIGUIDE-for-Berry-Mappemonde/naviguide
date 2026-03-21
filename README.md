@@ -23,6 +23,16 @@ Key capabilities:
 - **AI agent chat** — per-leg queries to weather, risk, piracy, and custom AI agents (**Claude** streaming)
 - **NavSecOps / GitLab Duo-style API** — `POST /duo/validate`, `/duo/risk` (Gemini), `/duo/briefing` (Claude)
 
+### Data / reproducibility
+
+Large geospatial files (GEBCO, World Bank ship density) are **not** in Git. After clone, from the repo root run:
+
+```bash
+./scripts/fetch_data.sh
+```
+
+Then confirm layout with `./scripts/fetch_data.sh --check-only`. Full instructions for jurors: **[docs/DATA.md](docs/DATA.md)**.
+
 ---
 
 ## 🏗️ Architecture

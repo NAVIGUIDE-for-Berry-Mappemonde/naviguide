@@ -84,8 +84,12 @@ def _is_land_hires(lat: float, lon: float) -> bool:
         return len(_NE_TREE.query(pt, predicate="intersects")) > 0
     return False
 
-# Charger les variables d'environnement
-load_dotenv()
+# Charger les variables d'environnement : d'abord naviguide-api/.env, puis
+# naviguide_workspace/.env (sans écraser) pour GEMINI_*, ANTHROPIC_*, etc.
+_API_ROOT = pathlib.Path(__file__).resolve().parent
+_WS_ENV = _API_ROOT.parent / "naviguide_workspace" / ".env"
+load_dotenv(_API_ROOT / ".env")
+load_dotenv(_WS_ENV, override=False)
 
 COPERNICUS_USERNAME = os.getenv("COPERNICUS_USERNAME")
 COPERNICUS_PASSWORD = os.getenv("COPERNICUS_PASSWORD")
