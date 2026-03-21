@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "agents": {
+    "agents/agent.yml": {
+      "catalog_id": "gid://gitlab/Ai::Catalog::Item/1005817",
+      "name": "NavSecOps Route Intelligence",
+      "created_at": "2026-03-21T04:24:17.029Z",
+      "item_consumers": {
+        "group": {
+          "id": "gid://gitlab/Ai::Catalog::ItemConsumer/5582809"
+        },
+        "project": {
+          "id": "gid://gitlab/Ai::Catalog::ItemConsumer/5582810"
+        }
+      },
+      "latest_sync": {
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026",
+        "catalog_version": "1.0.0",
+        "synced_at": "2026-03-21T04:24:17.029Z",
+        "definition_hash": "791a62d6953b0cc5"
+      }
+    }
+  },
+  "flows": {
+    "flows/flow.yml": {
+      "catalog_id": "gid://gitlab/Ai::Catalog::Item/1005818",
+      "name": "NavSecOps Route-as-Code Flow",
+      "created_at": "2026-03-21T04:24:17.755Z",
+      "item_consumers": {
+        "group": {
+          "id": "gid://gitlab/Ai::Catalog::ItemConsumer/5582811"
+        },
+        "project": {
+          "id": "gid://gitlab/Ai::Catalog::ItemConsumer/5582812"
+        }
+      },
+      "latest_sync": {
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026",
+        "catalog_version": "1.0.0",
+        "synced_at": "2026-03-21T04:24:17.755Z",
+        "definition_hash": "073663312359001e"
+      }
+    }
+  }
+}
