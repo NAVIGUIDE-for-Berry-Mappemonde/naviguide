@@ -1,131 +1,199 @@
 """
-<<<<<<< HEAD
-llm_utils.py — Unified LLM caller (Gemini)
-Drop-in replacement for the former AWS Bedrock / Nova implementation.
+NAVIGUIDE — Dual LLM stack (NavSecOps / hackathon Google + Anthropic).
+
+- Gemini: raw GeoJSON analysis (/duo/validate, /duo/risk) via google-generativeai.
+- Claude: skipper synthesis (/duo/briefing, orchestrator executive briefing, SSE agents)
+  via Anthropic API (ANTHROPIC_API_KEY).
+
+Optional GCP: set GEMINI_SECRET_RESOURCE to a Secret Manager resource name
+(projects/…/secrets/…/versions/latest) to load GEMINI_API_KEY when the env var is unset.
 """
 
-import os
-import logging
-
-log = logging.getLogger("llm_utils")
-
-_gemini_model = None
-
-def _get_model():
-    global _gemini_model
-    if _gemini_model is None:
-        import google.generativeai as genai
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("GEMINI_API_KEY environment variable is not set")
-        genai.configure(api_key=api_key)
-        _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
-    return _gemini_model
-
-
-def invoke_llm(prompt: str, fallback_msg: str = "") -> str:
-    """
-    Send a prompt to Gemini and return the text response.
-    Returns fallback_msg on any error.
-    """
-    try:
-        model = _get_model()
-        response = model.generate_content(
-            prompt,
-            generation_config={"max_output_tokens": 1024, "temperature": 0.4},
-        )
-        text = response.text.strip()
-        log.info(f"[llm_utils] Gemini responded ({len(text)} chars)")
-        return text
-    except Exception as exc:
-        log.error(f"[llm_utils] Gemini call failed: {exc}")
-        return fallback_msg
-=======
-NAVIGUIDE — LLM invoker for Hackathon Amazon Nova AI
-
-Chain:
-  1. Nova 2 Lite (Bedrock)
-  2. Claude via Anthropic API direct (ANTHROPIC_API_KEY) — prioritaire si Nova bloqué
-  3. Claude Bedrock (dernier recours)
-  4. None → fallback statique côté caller
-
-Credentials: naviguide_workspace/.env
-  - AWS_* ou AWS_BEARER_TOKEN_BEDROCK pour Bedrock
-  - ANTHROPIC_API_KEY pour fallback direct (clé API Anthropic)
-"""
+from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
-from typing import AsyncIterator, Optional
+import re
+from typing import Any, AsyncIterator, Dict, Optional
 
 log = logging.getLogger("naviguide.llm")
 
-NOVA_MODEL = "us.amazon.nova-2-lite-v1:0"  # US region format
-CLAUDE_BEDROCK_MODEL = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 CLAUDE_ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-REGION = "us-east-1"
+
+_gemini_model = None
+
+
+def _maybe_secret_manager_key() -> Optional[str]:
+    resource = os.getenv("GEMINI_SECRET_RESOURCE", "").strip()
+    if not resource:
+        return None
+    try:
+        from google.cloud import secretmanager  # type: ignore
+
+        client = secretmanager.SecretManagerServiceClient()
+        resp = client.access_secret_version(request={"name": resource})
+        return resp.payload.data.decode("UTF-8").strip()
+    except Exception as exc:
+        log.warning("[llm] Secret Manager GEMINI key failed: %s", exc)
+        return None
+
+
+def _gemini_api_key() -> str:
+    k = os.getenv("GEMINI_API_KEY", "").strip()
+    if k:
+        return k
+    k = _maybe_secret_manager_key()
+    if k:
+        return k
+    raise RuntimeError(
+        "GEMINI_API_KEY is not set (or GEMINI_SECRET_RESOURCE could not load a key)"
+    )
+
+
+def _get_gemini_model():
+    global _gemini_model
+    if _gemini_model is None:
+        import google.generativeai as genai
+
+        genai.configure(api_key=_gemini_api_key())
+        _gemini_model = genai.GenerativeModel(GEMINI_MODEL)
+    return _gemini_model
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    text = text.strip()
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    if m:
+        text = m.group(1).strip()
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+    raise ValueError(f"Gemini did not return valid JSON object: {text[:500]}...")
+
+
+def _gemini_json(system: str, user: str) -> Dict[str, Any]:
+    model = _get_gemini_model()
+    prompt = f"{system}\n\n{user}"
+    response = model.generate_content(
+        prompt,
+        generation_config={"max_output_tokens": 4096, "temperature": 0.2},
+    )
+    raw = (response.text or "").strip()
+    if not raw:
+        raise RuntimeError("Gemini returned empty response")
+    log.info("[llm] Gemini JSON response (%d chars)", len(raw))
+    return _extract_json_object(raw)
+
+
+def duo_validate_route(geojson: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Structural / navigational validation of a route GeoJSON (Gemini).
+    Returns a dict with keys like valid, issues, waypoint_count, geometry_type.
+    """
+    system = (
+        "You are a maritime GIS validator. Reply with a single JSON object only, no markdown. "
+        'Schema: {"valid": bool, "geometry_type": string, "waypoint_count": int, '
+        '"issues": [string], "bbox_hint": {"min_lat": number, "max_lat": number, '
+        '"min_lon": number, "max_lon": number} or null}.'
+    )
+    user = f"Validate this GeoJSON for use as a sailing route (coordinates lon, lat order):\n{json.dumps(geojson, ensure_ascii=False)[:120000]}"
+    return _gemini_json(system, user)
+
+
+def duo_risk_assessment(geojson: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    High-level spatial risk digest (Gemini). Output is consumed by Claude for /duo/briefing.
+    """
+    system = (
+        "You are NAVIGUIDE maritime risk analysis. Output a single JSON object only, no markdown. "
+        'Schema: {"overall_risk": "LOW"|"MODERATE"|"HIGH"|"CRITICAL", "risk_score": number 0-1, '
+        '"segments": [{"label": string, "risk": string, "notes": string}], '
+        '"piracy_notes": string, "weather_notes": string, "anti_shipping_notes": string, '
+        '"recommendations": [string]}. Use conservative assumptions if data is missing.'
+    )
+    user = f"Analyse risks for this expedition route GeoJSON:\n{json.dumps(geojson, ensure_ascii=False)[:120000]}"
+    return _gemini_json(system, user)
+
+
+def invoke_claude_briefing_from_analysis(
+    analysis: Dict[str, Any],
+    validation: Optional[Dict[str, Any]] = None,
+    language: str = "en",
+) -> Optional[str]:
+    """Synthesis-only: Claude turns structured Gemini output into a skipper report."""
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        log.warning("[llm] ANTHROPIC_API_KEY not set — skipping Claude briefing")
+        return None
+
+    lang = "English" if language.lower().startswith("en") else "French"
+    system = (
+        f"You are NAVIGUIDE's chief maritime safety officer. Write a concise skipper intelligence "
+        f"report in {lang} (max 320 words). Use exactly these section headings in order:\n"
+        "1. EXECUTIVE SUMMARY\n2. ROUTE VALIDATION\n3. KEY RISKS\n4. RECOMMENDED ACTIONS\n"
+        "Base every claim on the JSON facts provided; if data is missing, say so explicitly."
+    )
+    payload = {"validation": validation or {}, "risk_analysis": analysis}
+    prompt = f"Structured analysis JSON:\n{json.dumps(payload, ensure_ascii=False, indent=2)[:100000]}"
+
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=CLAUDE_ANTHROPIC_MODEL,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = message.content[0].text if message.content else ""
+        out = (text or "").strip()
+        if out:
+            log.info("[llm] Claude briefing OK (%d chars)", len(out))
+            return out
+    except Exception as exc:
+        log.warning("[llm] Claude briefing failed: %s", exc)
+    return None
 
 
 def invoke_llm(
     prompt: str,
     system: str = "",
-    fallback_msg: str = "LLM unavailable.",
+    fallback_msg: str = "",
 ) -> Optional[str]:
     """
-    Invoke LLM with prompt. Tries Nova → Claude (Bedrock) → Claude (API Anthropic).
-    Returns text or None on failure (caller should use fallback_msg).
+    Default LLM path for orchestrator + legacy callers: Claude (Anthropic API).
+    Returns None on failure (callers may use static fallback). Does not call Gemini.
     """
-    full_prompt = f"{system}\n\n{prompt}" if system else prompt
+    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        log.warning("[llm] ANTHROPIC_API_KEY not set")
+        return None
 
-    # 1. Nova 2 Lite (Bedrock)
     try:
-        import boto3
-        client = boto3.client("bedrock-runtime", region_name=REGION)
-        response = client.converse(
-            modelId=NOVA_MODEL,
-            messages=[{"role": "user", "content": [{"text": full_prompt}]}],
-        )
-        text = response["output"]["message"]["content"][0]["text"]
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+        kwargs: Dict[str, Any] = {
+            "model": CLAUDE_ANTHROPIC_MODEL,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system:
+            kwargs["system"] = system
+        message = client.messages.create(**kwargs)
+        text = message.content[0].text if message.content else ""
         if text and text.strip():
-            log.info(f"[llm] Nova 2 Lite OK ({len(text)} chars)")
+            log.info("[llm] Claude OK (%d chars)", len(text))
             return text.strip()
     except Exception as exc:
-        log.warning(f"[llm] Nova failed: {exc} — trying Anthropic API")
-
-    # 2. Claude via API Anthropic directe (clé API) — prioritaire car Bedrock peut crasher
-    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    if api_key:
-        try:
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-            kwargs = {"model": CLAUDE_ANTHROPIC_MODEL, "max_tokens": 2048, "messages": [{"role": "user", "content": prompt}]}
-            if system:
-                kwargs["system"] = system
-            message = client.messages.create(**kwargs)
-            text = message.content[0].text if message.content else ""
-            if text and text.strip():
-                log.info(f"[llm] Claude Anthropic API OK ({len(text)} chars)")
-                return text.strip()
-        except Exception as exc:
-            log.warning(f"[llm] Claude Anthropic API failed: {exc}")
-    else:
-        log.debug("[llm] ANTHROPIC_API_KEY not set — skipping direct API fallback")
-
-    # 3. Claude (Bedrock) — dernier recours (peut crasher sur certains environnements)
-    try:
-        from langchain_aws import ChatBedrock
-        from langchain_core.messages import HumanMessage
-
-        llm = ChatBedrock(model_id=CLAUDE_BEDROCK_MODEL, region_name=REGION)
-        msg = llm.invoke([HumanMessage(content=full_prompt)])
-        text = msg.content if hasattr(msg, "content") else str(msg)
-        if text and str(text).strip():
-            log.info(f"[llm] Claude Bedrock OK ({len(text)} chars)")
-            return str(text).strip()
-    except Exception as exc:
-        log.warning(f"[llm] Claude Bedrock failed: {exc}")
-
+        log.warning("[llm] Claude invoke failed: %s", exc)
     return None
 
 
@@ -134,12 +202,13 @@ async def stream_llm(
     system: str = "",
 ) -> AsyncIterator[str]:
     """
-    Async generator — yields tokens for SSE streaming.
-    Uses invoke_llm (Nova + Claude fallback) then yields word-by-word.
+    Stream tokens for FastAPI SSE: full Claude response, then word-by-word yield
+    (simple progressive display compatible with existing AgentPanel).
     """
-    full_prompt = f"{system}\n\n{prompt}" if system else prompt
-    text = await asyncio.to_thread(invoke_llm, full_prompt, system="", fallback_msg="")
-    if text:
-        for word in text.split():
-            yield word + " "
->>>>>>> f4d5b955cff48fe4171a3ea152d75be0dbcc5213
+    try:
+        text = await asyncio.to_thread(invoke_llm, prompt, system, "")
+        if text:
+            for word in text.split():
+                yield word + " "
+    except Exception as exc:
+        log.warning("[llm] stream_llm failed: %s", exc)

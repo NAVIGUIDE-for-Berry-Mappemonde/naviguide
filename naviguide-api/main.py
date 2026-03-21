@@ -702,6 +702,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from naviguide_duo import router as duo_router  # noqa: E402
+
+app.include_router(duo_router)
+
 
 class PositionRequest(BaseModel):
     latitude: float

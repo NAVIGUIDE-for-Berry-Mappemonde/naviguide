@@ -25,7 +25,7 @@ from polar_engine import PolarData
 
 log = logging.getLogger("polar_agent")
 
-# Add naviguide_workspace to path for llm_utils (Nova + Claude)
+# Add naviguide_workspace to path for llm_utils (Claude)
 _WS = Path(__file__).resolve().parents[1] / "naviguide_workspace"
 if str(_WS) not in sys.path:
     sys.path.insert(0, str(_WS))
@@ -35,14 +35,14 @@ load_dotenv(_WS / ".env")
 
 def _llm_call(prompt: str) -> str:
     """
-    Single-shot LLM call via Nova + Claude (Bedrock).
+    Single-shot LLM call via Claude (Anthropic API).
     Falls back to empty string if credentials are missing or service unreachable.
     """
     try:
         from llm_utils import invoke_llm
         return invoke_llm(prompt, fallback_msg="") or ""
     except Exception as exc:
-        log.warning(f"Nova/Claude unavailable: {exc}")
+        log.warning(f"Claude unavailable: {exc}")
         return ""
 
 

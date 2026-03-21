@@ -1,12 +1,12 @@
 """
-NAVIGUIDE Simulation Agents — Nova + Claude Fallback (Bedrock)
+NAVIGUIDE Simulation Agents — Claude (Anthropic API)
 
-Shared client for LLM calls via Bedrock: Nova 2 Lite primary, Claude 3.5 Sonnet fallback.
-Degrades gracefully when AWS_BEARER_TOKEN_BEDROCK is not configured.
+Per-leg SSE agents and LangGraph nodes use Anthropic Claude via naviguide_workspace/llm_utils.
+NavSecOps raw analysis uses Gemini on POST /duo/validate and /duo/risk (see naviguide_duo).
 
-Provides two calling modes:
-  - call_llm()   : synchronous, non-streaming (used by LangGraph agent nodes)
-  - stream_llm() : async generator, token-by-token streaming (used by FastAPI SSE endpoints)
+Modes:
+  - call_llm()   : synchronous (LangGraph agent nodes)
+  - stream_llm() : async generator, word-chunk streaming (FastAPI SSE)
 """
 
 import os

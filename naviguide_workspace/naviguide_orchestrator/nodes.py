@@ -10,7 +10,7 @@ Orchestration flow:
            ▼
   run_risk_assessment             ← invokes Agent 3 graph (with Agent 1 route)
            ▼
-  llm_expedition_briefing         ← Claude/ChatBedrock unified skipper executive summary
+  llm_expedition_briefing         ← Claude (Anthropic API) skipper executive summary
            ▼
   generate_expedition_plan        ← merge Agent 1 + Agent 3 → digital twin
            ▼
@@ -369,7 +369,7 @@ Ton: professionnel hauturier, concis. Max 280 mots. Rédige l'intégralité du b
         from llm_utils import invoke_llm
         briefing = invoke_llm(prompt, fallback_msg="")
         if briefing:
-            log.info("[orchestrator] LLM briefing generated via Nova/Claude")
+            log.info("[orchestrator] LLM briefing generated via Claude (Anthropic API)")
     except Exception as exc:
         log.warning(f"[orchestrator] LLM unavailable ({exc}) — using fallback briefing")
 
