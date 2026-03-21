@@ -1,0 +1,43 @@
+name: "NavSecOps Route-as-Code Flow"
+description: "GitLab Duo flow for expedition route review — drives the NavSecOps agent from user goals (e.g. MR context, GeoJSON checks) toward a structured intelligence-style answer."
+public: true
+definition:
+  version: v1
+  environment: ambient
+
+  components:
+    - name: "navsecops_agent"
+      type: AgentComponent
+      prompt_id: "navsecops_prompt"
+      inputs:
+        - "context:goal"
+      toolset:
+        - read_file
+        - read_files
+      ui_log_events:
+        - on_agent_final_answer
+        - on_tool_execution_success
+
+  prompts:
+    - prompt_id: "navsecops_prompt"
+      name: "NavSecOps route review"
+      prompt_template:
+        system: |
+          You are the NavSecOps route analyst for Berry-Mappemonde (NAVIGUIDE / Route-as-Code).
+          Analyze the user's goal in the context of maritime expedition planning.
+          Produce a short structured response: (1) Summary of the ask, (2) Key risks or checks,
+          (3) Recommended next steps (e.g. run NAVIGUIDE /duo/validate and /duo/risk, then /duo/briefing for skipper text).
+          Stay factual; do not invent tool or API results.
+        user: |
+          {{goal}}
+        placeholder: history
+      unit_primitives: []
+      params:
+        timeout: 180
+
+  routers:
+    - from: "navsecops_agent"
+      to: "end"
+
+  flow:
+    entry_point: "navsecops_agent"
