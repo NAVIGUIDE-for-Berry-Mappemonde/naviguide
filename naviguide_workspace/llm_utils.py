@@ -1,7 +1,7 @@
 """
 NAVIGUIDE — Dual LLM stack (NavSecOps / hackathon Google + Anthropic).
 
-- Gemini: raw GeoJSON analysis (/duo/validate, /duo/risk) via google-generativeai.
+- Gemini: raw GeoJSON analysis (/duo/validate, /duo/risk) via google-genai.
 - Claude: skipper synthesis (/duo/briefing, orchestrator executive briefing, SSE agents)
   via Anthropic API (ANTHROPIC_API_KEY).
 
@@ -20,10 +20,10 @@ from typing import Any, AsyncIterator, Dict, Optional
 
 log = logging.getLogger("naviguide.llm")
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 CLAUDE_ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
-_gemini_model = None
+_gemini_client = None
 
 
 def _maybe_secret_manager_key() -> Optional[str]:
@@ -53,14 +53,13 @@ def _gemini_api_key() -> str:
     )
 
 
-def _get_gemini_model():
-    global _gemini_model
-    if _gemini_model is None:
-        import google.generativeai as genai
+def _get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        from google import genai
 
-        genai.configure(api_key=_gemini_api_key())
-        _gemini_model = genai.GenerativeModel(GEMINI_MODEL)
-    return _gemini_model
+        _gemini_client = genai.Client(api_key=_gemini_api_key())
+    return _gemini_client
 
 
 def _extract_json_object(text: str) -> Dict[str, Any]:
@@ -78,11 +77,17 @@ def _extract_json_object(text: str) -> Dict[str, Any]:
 
 
 def _gemini_json(system: str, user: str) -> Dict[str, Any]:
-    model = _get_gemini_model()
-    prompt = f"{system}\n\n{user}"
-    response = model.generate_content(
-        prompt,
-        generation_config={"max_output_tokens": 4096, "temperature": 0.2},
+    from google.genai import types
+
+    client = _get_gemini_client()
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=4096,
+            temperature=0.2,
+        ),
     )
     raw = (response.text or "").strip()
     if not raw:

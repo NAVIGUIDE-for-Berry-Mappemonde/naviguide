@@ -1,0 +1,28 @@
+# Git / editor
+.git
+.gitignore
+.cursor
+.DS_Store
+
+# Secrets (do not send to Docker daemon)
+.env
+naviguide-api/.env
+naviguide_workspace/.env
+
+# Large or irrelevant trees for this API image (Dockerfile only COPYs naviguide-api + naviguide_workspace)
+data/
+amazon-nova-samples/
+
+# Python caches / local envs
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/venv
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+
+# Not used by Dockerfile COPY
+*.md
+docs/

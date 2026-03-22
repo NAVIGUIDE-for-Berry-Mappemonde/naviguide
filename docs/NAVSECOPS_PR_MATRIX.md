@@ -6,7 +6,7 @@ Branche locale suivie : `pr-shreyas` (remote `origin`). Le commit `50c33130` (" 
 |------|---------------------------|-----------------|--------|
 | LLM | Conflit HEAD (Gemini) vs `f4d5b955` (Nova + Claude Bedrock) dans `llm_utils.py` | Gemini pour analyse GeoJSON (`/duo/validate`, `/duo/risk`) ; Claude (API Anthropic) pour synthese (`/duo/briefing`, orchestrateur, agents streaming) | Fusion unique dans `naviguide_workspace/llm_utils.py` ; abandon Nova sur ces chemins |
 | API | Pas de routes `/duo/*` | Exposer `/duo/validate`, `/duo/risk`, `/duo/briefing` sur `naviguide-api` | Ajouter router Duo |
-| Dependances | Conflit dans `naviguide_workspace/requirements.txt` | `google-generativeai` + `anthropic` (+ option Secret Manager GCP) | Resoudre le fichier |
+| Dependances | Conflit dans `naviguide_workspace/requirements.txt` | `google-genai` + `anthropic` (+ option Secret Manager GCP) | Resoudre le fichier |
 | venv | `naviguide-api/venv/` tracke, fichiers corrompus | Aucun venv dans Git ; `.gitignore` | `git rm -r --cached naviguide-api/venv` |
 | Doc | `README.md` en conflit | Sections Google (Gemini/GCP) + Anthropic (Claude), NavSecOps | Fusion README |
 | Orchestrateur | `invoke_llm` casse tant que conflit persiste | Briefing executif via Claude | Inchange cote appel ; implementation stable |

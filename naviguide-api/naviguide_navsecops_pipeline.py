@@ -30,6 +30,8 @@ if str(_WS) not in sys.path:
     sys.path.insert(0, str(_WS))
 
 from llm_utils import (  # noqa: E402
+    CLAUDE_ANTHROPIC_MODEL,
+    GEMINI_MODEL,
     duo_risk_assessment,
     duo_validate_route,
     invoke_claude_briefing_from_analysis,
@@ -183,7 +185,7 @@ def _build_meta(
     return AnalyzeMeta(
         request_id=request_id,
         duration_ms=round((time.monotonic() - t0) * 1000),
-        models=["gemini-2.0-flash", "claude-sonnet-4-20250514"],
+        models=[GEMINI_MODEL, CLAUDE_ANTHROPIC_MODEL],
         stages_ok=3 - len(errors),
         stages_failed=len(errors),
     )

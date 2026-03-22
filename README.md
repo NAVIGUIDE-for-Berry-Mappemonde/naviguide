@@ -1,298 +1,196 @@
-# 🧭 NAVIGUIDE — Berry-Mappemonde Expedition
+# NAVIGUIDE
 
-> **AI-powered maritime navigation assistant** for the Berry-Mappemonde circumnavigation — 36,000+ nautical miles across 45+ stopovers, powered by European space technologies (Copernicus) and multi-agent AI orchestration.
-
-🌐 **Live app:** [https://csw6hpki.run.complete.dev](https://csw6hpki.run.complete.dev)
-
-🏆 **Hackathon / NavSecOps** — Dual LLM: **Google Gemini** (route GeoJSON analysis on `/duo/validate` and `/duo/risk`) and **Anthropic Claude** (skipper synthesis on `/duo/briefing`, orchestrator executive briefing, and per-leg SSE agents). See [docs/NAVSECOPS_PR_MATRIX.md](docs/NAVSECOPS_PR_MATRIX.md).
+Assistant décisionnel pour la navigation maritime (projet **Berry-Mappemonde**). Ce dépôt contient l’API **FastAPI** (`naviguide-api`), le code partagé LLM (`naviguide_workspace`), le frontend React (`naviguide-app`), et la chaîne **NavSecOps** (analyse GeoJSON : Gemini + synthèse Claude).
 
 ---
 
-## 📖 Overview
+## Périmètre : image Docker vs stack complète
 
-NAVIGUIDE is a decision-support system (SADP — *Système d'Aide à la Décision Plaisancière*) built specifically for the **Berry-Mappemonde** offshore circumnavigation. It is **not** an ECDIS — it is a strategic route planner that fuses satellite data, AI agents, and real boat performance polars to give the skipper an honest, data-driven expedition briefing.
+| Mode | Contenu | Usage |
+|------|---------|--------|
+| **Image Docker** ([Dockerfile](Dockerfile) à la racine) | Copie uniquement `naviguide_workspace` + `naviguide-api`, lance `uvicorn main:app` | Cloud Run, test API isolée |
+| **Stack locale complète** | React, proxy, supervisord, plusieurs services | Développement intégré — voir [docs/MANUAL.md](docs/MANUAL.md) |
 
-Key capabilities:
-- **Interactive route map** with anti-shipping logic (avoids commercial traffic lanes)
-- **AI expedition briefing** — Agents 1 & 3 compute route/risk metrics; **Claude** writes the executive summary (~26 sec total pipeline)
-- **Catamaran simulation mode** — step through each leg with live ETA, bearing, and VMG
-- **Polar performance upload** — upload your boat's polar CSV for realistic speed/ETA calculations
-- **Copernicus live data** — wind, wave, and current overlays from EU Copernicus Marine Service
-- **Maritime layers** — ZEE (EEZ) zones, WPI world ports, buoyage markers
-- **Export** — GeoJSON and KML route export with full waypoint metadata
-- **AI agent chat** — per-leg queries to weather, risk, piracy, and custom AI agents (**Claude** streaming)
-- **NavSecOps / GitLab Duo-style API** — `POST /duo/validate`, `/duo/risk` (Gemini), `/duo/briefing` (Claude)
+L’image Docker **ne** démarre **pas** le frontend ni supervisord. Le port d’écoute est **`PORT`** (souvent **8080** en local, défini par Cloud Run en production).
 
-### Data / reproducibility
+---
 
-Large geospatial files (GEBCO, World Bank ship density) are **not** in Git. After clone, from the repo root run:
+## Prérequis
+
+- **Python 3.12** (aligné sur le Dockerfile)
+- **Docker** pour builder / exécuter l’API
+- Sur **Mac Apple Silicon** : pour pousser une image vers **Cloud Run (linux/amd64)**, utiliser **`docker buildx`** avec `--platform linux/amd64` (le builder classique peut produire une image **arm64** incompatible → erreur `exec format error` sur GCP). Installer le plugin **buildx** si `docker buildx` est inconnu (`brew install docker-buildx` + lien dans `~/.docker/cli-plugins`).
+
+---
+
+## Configuration
+
+1. Copier le modèle : `cp naviguide-api/.env.example naviguide-api/.env`
+2. Renseigner au minimum (voir commentaires dans le fichier) :
+
+| Groupe | Variables |
+|--------|-----------|
+| Copernicus | `COPERNICUS_USERNAME`, `COPERNICUS_PASSWORD` |
+| Anthropic | `ANTHROPIC_API_KEY` — optionnel : `ANTHROPIC_MODEL` |
+| Google Gemini | `GEMINI_API_KEY` — optionnel : `GEMINI_MODEL` (défaut : `gemini-2.5-pro`), `GEMINI_SECRET_RESOURCE` (Secret Manager GCP) |
+| NavSecOps | `NAVSECOPS_INGEST_SECRET` (secret partagé pour le Bearer) |
+| Optionnel | `STORMGLASS_API_KEY`, `PORT` |
+
+Ne pas committer `naviguide-api/.env`.
+
+---
+
+## Comment tester (local, Docker)
+
+Depuis la **racine du dépôt** (là où se trouve le `Dockerfile`) :
 
 ```bash
-./scripts/fetch_data.sh
+docker build -t naviguide-api:local .
+docker run --rm -p 8080:8080 --env-file naviguide-api/.env -e PORT=8080 naviguide-api:local
 ```
 
-Then confirm layout with `./scripts/fetch_data.sh --check-only`. Full instructions for jurors: **[docs/DATA.md](docs/DATA.md)**.
+Puis :
+
+- **Swagger** : http://127.0.0.1:8080/docs  
+- **Autorisation** : bouton *Authorize* — saisir la **valeur** du secret NavSecOps (souvent **sans** le préfixe `Bearer `, selon l’UI).
+
+**Exemple `curl`** — `POST /api/v1/navsecops/analyze` :
+
+```bash
+curl -sS -X POST 'http://127.0.0.1:8080/api/v1/navsecops/analyze' \
+  -H 'accept: application/json' \
+  -H 'Authorization: Bearer VOTRE_NAVSECOPS_INGEST_SECRET' \
+  -H 'Content-Type: application/json' \
+  -d '{"geojson":{"type":"Feature","properties":{"name":"test"},"geometry":{"type":"LineString","coordinates":[[-1.15,46.15],[-4.5,48.4]]}},"language":"fr"}'
+```
+
+**Chaîne GitLab / script local** (API déjà démarrée ailleurs) : [scripts/gitlab_navsecops_chain.sh](scripts/gitlab_navsecops_chain.sh).
 
 ---
 
-## 🏗️ Architecture
+## Déploiement Google Cloud Run (checklist de redéploiement)
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Cloudflare CDN                        │
-│              https://csw6hpki.run.complete.dev           │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTPS :443
-┌──────────────────────▼──────────────────────────────────┐
-│           naviguide-proxy  (port 3016)                   │
-│       FastAPI — static files + API reverse proxy         │
-│                                                          │
-│  GET  /                    → React SPA (dist/index.html) │
-│  /route /wind /wave        → naviguide-api   :8001       │
-│  /current /proxy/* /agents → naviguide-api   :8001       │
-│  /duo/*                    → naviguide-api   :8001       │
-│  /api/v1/polar/*           → polar-api       :8004       │
-│  /api/v1/routing/*         → weather-routing :3010       │
-│  /api/v1/*                 → orchestrator    :3008       │
-└───────┬──────────────────┬────────────────┬─────────────┘
-        │                  │                │
-┌───────▼──────┐  ┌────────▼───────┐  ┌────▼──────────┐
-│naviguide-api │  │  orchestrator  │  │   polar-api    │
-│  port 8001   │  │   port 3008    │  │   port 8004    │
-│  FastAPI     │  │   LangGraph    │  │   FastAPI      │
-│  routing +   │  │   multi-agent  │  │   polar CSV    │
-│  Copernicus  │  │   + Claude     │  │   VMG analysis │
-│  wind/wave   │  │   (briefing)   │  │                │
-└──────────────┘  └────────────────┘  └────────────────┘
+Chaque changement de **code ou dépendances** dans l’image impose : **rebuild → push → nouvelle révision Cloud Run**.
+
+### Prérequis GCP
+
+- Projet (ex.) : `naviguide-for-berry-mappemonde`
+- **Artifact Registry** : dépôt Docker (ex. `naviguide-api` en `europe-west9`)
+- **Secret Manager** : secrets montés en variables d’environnement sur le service, par ex.  
+  `gemini-api-key`, `anthropic-api-key`, `navsecops-ingest-secret`, `copernicus-username`, `copernicus-password`
+- Compte d’exécution Cloud Run : rôle **Secret Manager Secret Accessor** sur ces secrets
+- Invocation **publique** (juges / Swagger sans compte Google) : `allUsers` → `roles/run.invoker` sur le service. Si l’organisation applique **Domain restricted sharing** (`iam.allowedPolicyMemberDomains`), prévoir une **exception au niveau du projet** pour autoriser `allUsers` sur ce service uniquement.
+
+### 1. Authentification Docker vers Artifact Registry
+
+```bash
+gcloud auth configure-docker europe-west9-docker.pkg.dev
 ```
 
-### Services managed by supervisord
+### 2. Build image **linux/amd64** (obligatoire depuis un Mac ARM)
 
-| Service | Port | Description |
-|---|---|---|
-| `naviguide-proxy` | 3016 | FastAPI reverse proxy + React SPA static file server |
-| `naviguide-api` | 8001 | Core routing engine — land avoidance, Copernicus wind/wave/current, ZEE proxy, AI agents, `/duo/*` |
-| `naviguide-orchestrator` | 3008 | LangGraph multi-agent AI pipeline — expedition briefing |
-| `naviguide-polar` | 8004 | Polar CSV upload, VMG computation, performance summary |
+```bash
+docker buildx build --platform linux/amd64 -t naviguide-api:local --load .
+```
+
+Vérification :
+
+```bash
+docker image inspect naviguide-api:local --format '{{.Architecture}}'
+```
+
+Attendu : `amd64`.
+
+### 3. Tag + push
+
+Remplacer `vN` par un nouveau tag à chaque release (ex. `v5`, `v6`).
+
+```bash
+docker tag naviguide-api:local \
+  europe-west9-docker.pkg.dev/naviguide-for-berry-mappemonde/naviguide-api/naviguide-api:vN
+
+docker push europe-west9-docker.pkg.dev/naviguide-for-berry-mappemonde/naviguide-api/naviguide-api:vN
+```
+
+### 4. Déployer / mettre à jour le service
+
+```bash
+gcloud run deploy naviguide-api \
+  --region=europe-west9 \
+  --project=naviguide-for-berry-mappemonde \
+  --image=europe-west9-docker.pkg.dev/naviguide-for-berry-mappemonde/naviguide-api/naviguide-api:vN \
+  --platform=managed \
+  --allow-unauthenticated \
+  --port=8080 \
+  --memory=2Gi \
+  --timeout=300 \
+  --set-secrets=GEMINI_API_KEY=gemini-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,NAVSECOPS_INGEST_SECRET=navsecops-ingest-secret:latest,COPERNICUS_USERNAME=copernicus-username:latest,COPERNICUS_PASSWORD=copernicus-password:latest \
+  --set-env-vars=GEMINI_MODEL=gemini-2.5-pro
+```
+
+Si `--allow-unauthenticated` échoue (policy org), ajouter manuellement le binding `allUsers` / `roles/run.invoker` une fois la policy projet corrigée.
+
+### 5. URL du service
+
+```bash
+gcloud run services describe naviguide-api \
+  --region=europe-west9 \
+  --project=naviguide-for-berry-mappemonde \
+  --format='value(status.url)'
+```
+
+Smoke test : `GET …/docs` puis le même `curl` qu’en local en remplaçant l’hôte par l’URL Cloud Run.
 
 ---
 
-## 🤖 AI Pipeline
+## Endpoints API (aperçu)
 
-The expedition briefing is generated by a **3-step multi-agent pipeline** (~26 seconds total):
+| Chemin | Description |
+|--------|-------------|
+| `POST /api/v1/navsecops/analyze` | Chaîne validate (Gemini) → risk (Gemini) → briefing (Claude) — Bearer `NAVSECOPS_INGEST_SECRET` |
+| `POST /duo/validate` | Validation GeoJSON (Gemini) |
+| `POST /duo/risk` | Analyse de risque (Gemini) |
+| `POST /duo/briefing` | Synthèse skipper (Claude) |
 
-```
-POST /api/v1/expedition/plan/berry-mappemonde
-         │
-         ▼
-┌──────────────────────────────┐
-│ Agent 1 — Route Intelligence │  (pure computation — no LLM)
-│ Anti-shipping score analysis │  ~6 sec
-│ Per-segment route quality    │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│ Agent 3 — Risk Assessment    │  (pure computation — no LLM)
-│ Per-waypoint risk scoring    │  ~8 sec
-│ CRITICAL / HIGH / LOW alerts │
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│ Briefing — Executive Summary │  Anthropic Claude (API)
-│ Skipper-grade briefing       │  ~14 sec
-│ FR/EN, max 280 words         │
-└──────────────────────────────┘
-```
-
-**Models:** Orchestrator briefing and simulation agents use **Claude** via `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL` optional). If the API is unavailable, a **structured static fallback** briefing is returned (not silent). Manuel: [docs/MANUAL.md](docs/MANUAL.md). Legacy Nova/Bedrock setup (historical): [docs/SETUP_NOVA_CREDITS.md](docs/SETUP_NOVA_CREDITS.md), [docs/PLAN_DEV_NOVA.md](docs/PLAN_DEV_NOVA.md).
-
-> **Note:** The frontend caches the briefing in **localStorage (24h TTL)** and displays it instantly on subsequent loads while refreshing in the background. Hard-refresh (`Ctrl+Shift+R`) clears the cache.
-
-### NavSecOps — `naviguide-api` `/duo/*` (Gemini + Claude)
-
-| Step | Method | Provider | Role |
-|---|---|---|---|
-| Validate GeoJSON | `POST /duo/validate` | Gemini | Structural checks → JSON |
-| Risk digest | `POST /duo/risk` | Gemini | Route risk JSON for downstream synthesis |
-| Skipper report | `POST /duo/briefing` | Claude | Narrative report from structured JSON only |
-
-Optional **GCP**: load `GEMINI_API_KEY` from **Secret Manager** by setting `GEMINI_SECRET_RESOURCE` to `projects/PROJECT/secrets/SECRET/versions/latest` (requires `google-cloud-secret-manager` and ADC).
-
-### AI Agents (per-leg chat — naviguide-api)
-
-| Agent | Route | Description |
-|---|---|---|
-| Meteo | `POST /agents/meteo` | Weather routing advice for the active leg |
-| Pirate | `POST /agents/pirate` | Piracy risk assessment (IMB/NATO data) |
-| Guard | `POST /agents/guard` | Maritime security and safety recommendations |
-| Custom | `POST /agents/custom` | Port entry intelligence and local knowledge |
+Détails NavSecOps : [docs/NAVSECOPS_PR_MATRIX.md](docs/NAVSECOPS_PR_MATRIX.md), [docs/NAVSECOPS_TECHNICAL_ROADMAP.md](docs/NAVSECOPS_TECHNICAL_ROADMAP.md).
 
 ---
 
-## 🗂️ Repository Structure
+## Structure du dépôt (extrait)
 
 ```
 naviguide/
-├── naviguide-app/                  # React frontend (Vite + MapLibre GL + Tailwind)
-├── naviguide-api/                  # Core routing API (Python/FastAPI, port 8001)
-│   ├── main.py
-│   ├── naviguide_duo.py            # /duo/validate, /duo/risk, /duo/briefing
-│   └── agents/                     # AI agent modules (meteo, pirate, guard, custom)
-├── naviguide_workspace/
-│   ├── naviguide_orchestrator/
-│   ├── llm_utils.py                # Gemini (analysis) + Claude (synthesis)
-│   ├── naviguide_agent1/
-│   ├── naviguide_agent3/
-│   ├── polar_api/
-│   └── requirements.txt
-├── polar_agent/
-├── docs/
-│   └── NAVSECOPS_PR_MATRIX.md
-├── proxy_server.py
-├── supervisor/
-└── scripts/
+├── Dockerfile                 # Image API seule (workspace + naviguide-api)
+├── naviguide-api/             # FastAPI — routing, Copernicus, agents, /duo, NavSecOps
+├── naviguide_workspace/       # llm_utils (Gemini google-genai + Claude), orchestrateur, agents…
+├── naviguide-app/             # Frontend React (Vite)
+├── docs/                      # Manuel, NavSecOps, données…
+├── scripts/                   # fetch_data, gitlab_navsecops_chain, etc.
+├── supervisor/                # Stack multi-services locale
+└── proxy_server.py            # Proxy de dev / déploiement classique
 ```
+
+Données lourdes (GEBCO, etc.) : [docs/DATA.md](docs/DATA.md), [scripts/fetch_data.sh](scripts/fetch_data.sh) si présent.
 
 ---
 
-## 🚀 Deployment
+## Stack technique (API)
 
-### Prerequisites
-
-- Python 3.10+
-- Node.js 18+
-- `supervisord` (`pip install supervisor`)
-- **Anthropic** — `ANTHROPIC_API_KEY` for orchestrator briefing and simulation agents (falls back to structured static briefing if missing)
-- **Google AI** — `GEMINI_API_KEY` for `/duo/*` analysis endpoints (returns HTTP 503 if missing)
-- Copernicus Marine Service credentials — for live wind/wave/current data
-
-### Environment Variables
-
-```bash
-# naviguide_workspace/.env (loaded by orchestrator, polar API, and naviguide-api agents)
-ANTHROPIC_API_KEY=sk-ant-...
-# Optional model override:
-# ANTHROPIC_MODEL=claude-sonnet-4-20250514
-
-# Gemini — NavSecOps /duo routes + optional Secret Manager
-GEMINI_API_KEY=AIza...
-# Optional: GEMINI_MODEL=gemini-2.0-flash
-# Optional GCP: GEMINI_SECRET_RESOURCE=projects/PROJECT/secrets/NAME/versions/latest
-
-# naviguide-app/.env.production (compiled into the frontend build)
-VITE_API_URL=https://your-domain.com
-VITE_ORCHESTRATOR_URL=https://your-domain.com
-VITE_POLAR_API_URL=https://your-domain.com
-VITE_WEATHER_ROUTING_URL=https://your-domain.com
-
-# Copernicus credentials (used by naviguide-api at runtime)
-COPERNICUS_USER=your-email@example.com
-COPERNICUS_PASSWORD=your-password
-```
-
-### Python venv (do not commit)
-
-Create virtual environments **locally** — never commit `naviguide-api/venv` or `.venv` to Git.
-
-```bash
-cd naviguide-api
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-cd ../naviguide_workspace
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Build & Start
-
-```bash
-# 1. Build the React frontend
-cd naviguide-app
-npm install
-npm run build
-
-# 2. Install Python deps (workspace + API venvs as above)
-
-# 3. Set credentials and start supervisord
-# Load naviguide_workspace/.env or export ANTHROPIC_API_KEY / GEMINI_API_KEY
-supervisord -c supervisor/supervisord.conf
-
-# 4. Verify all 4 services are running
-supervisorctl -c supervisor/supervisord.conf status
-```
-
-### GitLab / NavSecOps chain (local smoke)
-
-With `naviguide-api` running on port 8001:
-
-```bash
-./scripts/gitlab_navsecops_chain.sh http://127.0.0.1:8001
-```
-
-### Rebuild & Redeploy (hot update)
-
-```bash
-cd naviguide-app && npm run build
-supervisorctl -c supervisor/supervisord.conf reread
-supervisorctl -c supervisor/supervisord.conf update
-supervisorctl -c supervisor/supervisord.conf restart all
-```
+- FastAPI, uvicorn  
+- Gemini : SDK **`google-genai`** (Gemini Developer API)  
+- Claude : `anthropic`  
+- Optionnel : `google-cloud-secret-manager` pour `GEMINI_SECRET_RESOURCE`
 
 ---
 
-## 🗺️ Route — Berry-Mappemonde
+## Limites connues
 
-The expedition covers **36,000+ nautical miles** across the Atlantic, Caribbean, Pacific, Indian Ocean, and back to France:
-
-| Region | Key Stopovers |
-|---|---|
-| Europe | La Rochelle → Lisbonne → Îles Canaries |
-| Atlantique | Cap-Vert → Martinique → Guadeloupe |
-| Caraïbes | Saint-Barthélemy → Saint-Pierre-et-Miquelon |
-| Pacifique | Polynésie française → Nouvelle-Calédonie |
-| Indien | Mayotte → La Réunion |
-| Retour | France métropolitaine |
-
-Full waypoint list with coordinates: `naviguide-app/src/constants/itineraryPoints.js`
+- L’API n’est **pas** un ECDIS ; pas de substitute aux cartes officielles.  
+- Sans clés LLM, les routes concernées échouent ou dégradent (voir code / logs).  
+- Disque Cloud Run : éphémère (fichiers SQLite locaux non persistants entre révisions).
 
 ---
 
-## 🛠️ Tech Stack
+## Licence
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 18, Vite 7, MapLibre GL JS, Tailwind CSS v4 |
-| Backend API | Python 3, FastAPI, uvicorn |
-| AI Orchestration | LangGraph, Anthropic Claude (`anthropic`), Google Gemini (`google-generativeai`) |
-| Routing Engine | Custom haversine + iterative land-avoidance algorithm |
-| Marine Data | Copernicus Marine Service (CMEMS) — wind, wave, current |
-| Polar Analysis | Custom TWA×TWS VMG interpolation from CSV polars |
-| Process Manager | supervisord |
-| CDN / TLS | Cloudflare |
-| Deployment | Linux, EFS-backed persistent storage |
-
----
-
-## ⚠️ Known Limitations
-
-- **Not an ECDIS** — does not replace official charts, does not provide Under Keel Clearance or collision avoidance alerts
-- **Briefing cache** — expedition briefing is cached 24h in localStorage; `Ctrl+Shift+R` forces a fresh generation
-- **LLM keys** — without `ANTHROPIC_API_KEY`, the orchestrator uses a structured static briefing; without `GEMINI_API_KEY`, `/duo/validate` and `/duo/risk` return HTTP 503. Diagnostic: `python3 scripts/diagnose_llm.py`
-- **Port 3010 (weather routing)** — weather-routing service is referenced in proxy but not currently deployed
-
----
-
-## 📄 License
-
-Private — Berry-Mappemonde Expedition / NAVIGUIDE Project.
-
----
-
-*Built for the Berry-Mappemonde circumnavigation — La Rochelle → the world → La Rochelle.*
-
-**GitLab AI Hackathon:** for template onboarding, see the [onboarding issue](../../work_items/1) in this GitLab project.
+Projet privé — Berry-Mappemonde / NAVIGUIDE (voir [LICENSE](LICENSE) si présent).

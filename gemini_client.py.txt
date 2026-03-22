@@ -1,25 +1,30 @@
-import google.generativeai as genai
+# Snippet — Gemini (Developer API) via google-genai SDK
+# pip install google-genai python-dotenv
+
 import os
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
 
-# Choose model
-MODEL_NAME = "gemini-1.5-flash"
-
-model = genai.GenerativeModel(MODEL_NAME)
 
 def call_gemini(prompt: str) -> str:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return "Gemini Error: GEMINI_API_KEY not set"
     try:
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.4,
-                "max_output_tokens": 800
-            }
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.4,
+                max_output_tokens=800,
+            ),
         )
-        return response.text
+        return (response.text or "").strip() or "Gemini Error: empty response"
     except Exception as e:
-        return f"Gemini Error: {str(e)}"
+        return f"Gemini Error: {e}"

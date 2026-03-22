@@ -16,7 +16,7 @@ langgraph>=0.2.0
 langchain-core>=0.3.0
 
 # LLM — Gemini (analysis) + Claude Anthropic API (synthesis) + optional GCP Secret Manager
-google-generativeai>=0.8
+google-genai>=1.0.0
 anthropic>=0.40.0
 google-cloud-secret-manager>=2.20.0
 
