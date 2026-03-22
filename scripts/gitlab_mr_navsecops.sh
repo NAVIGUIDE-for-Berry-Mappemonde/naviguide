@@ -1,0 +1,156 @@
+#!/bin/bash
+# NavSecOps CI bridge -- called by .gitlab-ci.yml on MR pipelines.
+# Resolves a .geojson file from the MR diff, calls the analyze endpoint,
+# and posts the intelligence report as an MR comment.
+#
+# Requires bash (not sh/ash) for set -o pipefail.
+#
+# Required env (CI variables, masked/protected):
+#   NAVSECOPS_BASE_URL        -- e.g. https://api.naviguide.fr
+#   NAVSECOPS_INGEST_SECRET   -- Bearer token for the analyze endpoint
+#   GITLAB_TOKEN              -- PAT with api scope (preferred for MR notes)
+#
+# Optional env:
+#   NAVSECOPS_ROUTE_FILE      -- explicit path to .geojson (skips auto-detect)
+#
+# Token priority for MR notes:
+#   1. GITLAB_TOKEN (PAT) -- always works for notes if scope is correct
+#   2. CI_JOB_TOKEN       -- fallback; may 403 on notes depending on project settings
+#
+# Exit codes:
+#   0  -- success (report posted) or no .geojson in diff (skip)
+#   1  -- technical failure (API error, missing token, can't post note)
+set -euo pipefail
+
+# -- 0. Preflight checks --------------------------------------------------
+if [[ -z "${NAVSECOPS_BASE_URL:-}" ]]; then
+  echo "ERROR: NAVSECOPS_BASE_URL is not set"; exit 1
+fi
+if [[ -z "${NAVSECOPS_INGEST_SECRET:-}" ]]; then
+  echo "ERROR: NAVSECOPS_INGEST_SECRET is not set"; exit 1
+fi
+
+# -- 1. Resolve GeoJSON file -----------------------------------------------
+if [[ -n "${NAVSECOPS_ROUTE_FILE:-}" ]]; then
+  ROUTE_FILE="$NAVSECOPS_ROUTE_FILE"
+  echo "Using explicit NAVSECOPS_ROUTE_FILE: $ROUTE_FILE"
+  if [[ ! -f "$ROUTE_FILE" ]]; then
+    echo "ERROR: specified file does not exist: $ROUTE_FILE"; exit 1
+  fi
+else
+  # Auto-detect: first .geojson in the MR diff.
+  git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --depth=1 2>/dev/null || true
+  ROUTE_FILE=$(git diff --name-only "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" -- '*.geojson' | head -1) || true
+  if [[ -z "$ROUTE_FILE" ]]; then
+    echo "No .geojson file in MR diff -- skipping NavSecOps analysis."
+    exit 0
+  fi
+  echo "Auto-detected: $ROUTE_FILE"
+  if [[ ! -f "$ROUTE_FILE" ]]; then
+    echo "WARN: diff lists $ROUTE_FILE but file not on disk (deleted?). Skipping."
+    exit 0
+  fi
+fi
+
+# -- 2. Build JSON body safely with jq ------------------------------------
+BODY=$(jq -n \
+  --rawfile geo "$ROUTE_FILE" \
+  --arg lang "fr" \
+  '{geojson: ($geo | fromjson), language: $lang}')
+
+echo "Request body size: $(printf '%s' "$BODY" | wc -c | tr -d ' ') bytes"
+
+# -- 3. Call NavSecOps analyze endpoint ------------------------------------
+curl -s \
+  -o navsecops-response.json \
+  -w '{"http_code":%{http_code},"time_total":%{time_total},"size_download":%{size_download}}' \
+  -X POST "${NAVSECOPS_BASE_URL}/api/v1/navsecops/analyze" \
+  -H "Authorization: Bearer ${NAVSECOPS_INGEST_SECRET}" \
+  -H "Content-Type: application/json" \
+  --max-time 120 \
+  -d "$BODY" \
+  > navsecops-timing.json
+
+HTTP_CODE=$(jq -r '.http_code' navsecops-timing.json)
+TIME_TOTAL=$(jq -r '.time_total' navsecops-timing.json)
+echo "API responded: HTTP $HTTP_CODE in ${TIME_TOTAL}s"
+
+# -- 4. Fail on any non-2xx (including 422) --------------------------------
+if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+  echo "ERROR: API returned HTTP $HTTP_CODE"
+  cat navsecops-response.json 2>/dev/null || true
+  exit 1
+fi
+
+# -- 5. Extract fields from response ---------------------------------------
+STATUS=$(jq -r '.status // "unknown"' navsecops-response.json)
+BRIEFING=$(jq -r '.briefing // "No briefing generated (partial analysis)."' navsecops-response.json)
+REQUEST_ID=$(jq -r '.meta.request_id // "unknown"' navsecops-response.json)
+DURATION=$(jq -r '.meta.duration_ms // "?"' navsecops-response.json)
+STAGES_OK=$(jq -r '.meta.stages_ok // "?"' navsecops-response.json)
+STAGES_FAILED=$(jq -r '.meta.stages_failed // "0"' navsecops-response.json)
+
+echo "Analysis status: $STATUS (${STAGES_OK} ok, ${STAGES_FAILED} failed)"
+
+# -- 6. Build MR note with jq (safe escaping) ------------------------------
+# Write raw JSON to a temp file to avoid ARG_MAX on very large responses.
+RAW_JSON_FILE=$(mktemp)
+jq '.' navsecops-response.json > "$RAW_JSON_FILE"
+
+NOTE=$(jq -n \
+  --arg status "$STATUS" \
+  --arg route "$ROUTE_FILE" \
+  --arg sha "$CI_COMMIT_SHORT_SHA" \
+  --arg duration "$DURATION" \
+  --arg stages_ok "$STAGES_OK" \
+  --arg stages_failed "$STAGES_FAILED" \
+  --arg request_id "$REQUEST_ID" \
+  --arg briefing "$BRIEFING" \
+  --rawfile raw "$RAW_JSON_FILE" \
+  --arg pipeline_id "$CI_PIPELINE_ID" \
+  --arg pipeline_url "$CI_PIPELINE_URL" \
+  -r '
+"## NavSecOps Intelligence Report\n\n" +
+"**Status:** `" + $status + "` | **Route:** `" + $route + "` | **Commit:** `" + $sha + "`\n" +
+"**Analysis time:** " + $duration + "ms | **Stages:** " + $stages_ok + " ok, " + $stages_failed + " failed | **Request:** `" + $request_id + "`\n\n" +
+$briefing + "\n\n" +
+"---\n" +
+"<details><summary>Raw analysis JSON</summary>\n\n" +
+"```json\n" + $raw + "\n```\n" +
+"</details>\n\n" +
+"_Generated by NavSecOps CI -- [pipeline #" + $pipeline_id + "](" + $pipeline_url + ")_"
+')
+
+rm -f "$RAW_JSON_FILE"
+
+# -- 7. Post MR comment ----------------------------------------------------
+# Token priority: GITLAB_TOKEN (PAT) preferred because CI_JOB_TOKEN often
+# lacks permission for the merge_requests notes API (returns 403).
+# CI_JOB_TOKEN is used only as a last-resort fallback.
+if [[ -n "${GITLAB_TOKEN:-}" ]]; then
+  AUTH_HEADER="PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+  echo "Using GITLAB_TOKEN (PAT) for MR note"
+elif [[ -n "${CI_JOB_TOKEN:-}" ]]; then
+  AUTH_HEADER="JOB-TOKEN: ${CI_JOB_TOKEN}"
+  echo "Using CI_JOB_TOKEN for MR note (may 403 -- set GITLAB_TOKEN PAT if it fails)"
+else
+  echo "ERROR: No GitLab token available (GITLAB_TOKEN or CI_JOB_TOKEN)"
+  exit 1
+fi
+
+NOTE_HTTP=$(curl -s -o /dev/null -w '%{http_code}' \
+  -X POST "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/merge_requests/${CI_MERGE_REQUEST_IID}/notes" \
+  -H "$AUTH_HEADER" \
+  -H "Content-Type: application/json" \
+  --max-time 15 \
+  -d "$(jq -n --arg body "$NOTE" '{body: $body}')")
+
+if [[ "$NOTE_HTTP" -lt 200 || "$NOTE_HTTP" -ge 300 ]]; then
+  echo "ERROR: Failed to post MR note (HTTP $NOTE_HTTP)"
+  if [[ "$NOTE_HTTP" == "403" || "$NOTE_HTTP" == "401" ]]; then
+    echo "Tip: ensure GITLAB_TOKEN is a PAT with 'api' scope, set as a masked CI variable."
+  fi
+  exit 1
+fi
+
+echo "Report posted on MR (HTTP $NOTE_HTTP)"
