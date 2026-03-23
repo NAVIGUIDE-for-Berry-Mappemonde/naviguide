@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-24 (Duo: GeoJSON vs `main` + optional Git write path).
+**Last updated:** 2026-03-24 (Duo: captain short messages + MR-only Git path + reviewers).
 
 ---
 
@@ -55,7 +55,7 @@ flowchart LR
 | **NavSecOps persistence (Phase 3)** | `naviguide-api/naviguide_navsecops_store.py` (SQLite), `naviguide-api/naviguide_navsecops_sync.py`: `POST /sync-report`, `GET /reports`, `GET /reports/{id}`. |
 | **FastAPI entry** | `naviguide-api/main.py` — includes `duo_router`, `navsecops_router`, `navsecops_sync_router` under `/api/v1/navsecops`. |
 | **LLM helpers** | `naviguide_workspace/llm_utils.py` — same `sys.path` pattern as `naviguide_duo.py` for imports from `naviguide-api`. |
-| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — read/MR/repo tools plus optional Git tools: `create_commit`, `create_merge_request`, `update_merge_request`, `create_merge_request_note` (see §9). Does **not** call `POST /api/v1/navsecops/analyze`; CI + local `curl` guide remain primary. |
+| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — pasted GeoJSON vs `main`, **captain short-message** mode (no massive paste), **MR-only** Git workflow: branch `create_commit` → `create_merge_request` → mandatory `create_merge_request_note` → `update_merge_request` reviewers `iamRabia_N` + `clementfilisetti` (see §9, §9.6). No `POST /api/v1/navsecops/analyze` from Duo; CI + PDF/`curl` guide unchanged. |
 | **Proxy** | `proxy_server.py` — `/api/v1/navsecops/*` and `/duo/*` → `API_BACKEND` before orchestrator (Phase 4). |
 | **Docs** | `docs/NAVSECOPS_PR_MATRIX.md` — API contract, curl, errors (Phases 1, 3, 4). |
 
@@ -67,7 +67,7 @@ flowchart LR
 
 - **Why:** The hackathon MCP catalog (e.g. Linear, Atlassian, Context7) does **not** provide a generic authenticated HTTP client to our API. A custom agent limited to **read_file / read_files** cannot reliably `POST` to NavSecOps.
 - **Therefore:** **GitLab CI** (`curl` or shell + masked variables) calls `POST /api/v1/navsecops/analyze`, posts the **MR note** via GitLab API, and optionally calls **sync** (Phase 3).
-- **Duo’s role:** Publish a **custom agent or flow** in the hackathon group with MR/repo context, **comparison of pasted GeoJSON to `routes/naviguide-berry-mappemonde.geojson` on `main`**, skipper-facing briefings, and **optional** Git operations when the user explicitly requests a branch/MR. Duo still does **not** perform authenticated HTTP to NAVIGUIDE; **CI + the PDF/local guide** remain the reliable path for `POST /api/v1/navsecops/analyze` and MR notes from the pipeline.
+- **Duo’s role:** Custom agent/flow with **pasted vs `main`** compare, **short captain instructions** (load canon via `get_repository_file`, clarifications, avant/après), and **MR-only** repo updates after explicit confirmation: **never commit to `main` directly**; minimal edit to `routes/naviguide-berry-mappemonde.geojson` on a **feature branch**, MR to `main`, **mandatory** MR note (briefing), reviewers **`iamRabia_N`** and **`clementfilisetti`**. Duo does **not** call NAVIGUIDE over HTTP; **CI + PDF/local guide** stay primary for `analyze` and pipeline MR notes.
 - **One-liner:** *The Duo agent does not replace the HTTP call to NAVIGUIDE; CI performs the API call and MR comment; Duo provides trigger, context, and the “agent on GitLab” experience.*
 
 ### Decision 2 — Host the hackathon API on GCP
@@ -136,10 +136,10 @@ Documented decisions above. No code deliverable.
 
 #### Phase 2B — Duo agent / flow ✅ ENRICHED (2026-03-24)
 
-- **`agents/agent.yml` / `flows/flow.yml`:** Pasted GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → if diff, comparative skipper briefing (`## Écart par rapport au tracé canonique (main)` + standard sections); **no** catalog HTTP to NAVIGUIDE.
-- **Optional Git path (user must explicitly ask):** `create_commit` → `create_merge_request` → `update_merge_request` (reviewers if user provides GitLab usernames) → optional `create_merge_request_note` with briefing.
-- **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate against the live doc and **Web vs IDE** availability before each catalog publish; rename in YAML if the platform exposes different identifiers.
-- Deliverable: Duo complements **CI**; MR intelligence report from **`scripts/gitlab_mr_navsecops.sh`** remains unchanged.
+- **`agents/agent.yml` / `flows/flow.yml`:** (1) **Pasted** GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → `## Écart par rapport au tracé canonique (main)` + four rubriques si diff. (2) **Captain short message** (pas de gros JSON) → même canon → consigne en langage naturel → `## Consigne comprise` / extraits canon / `## Proposition (après)` / questions si besoin → rubriques skipper. (3) **Standard** fichier/MR/`list_dir`. **No** catalog HTTP to NAVIGUIDE.
+- **Git path (MR-only, after explicit confirmation):** `create_commit` **only** on `feat/route-*` or `duo/*`; **minimal** diff sur `routes/naviguide-berry-mappemonde.geojson` (reprendre le JSON canon en entier, ne modifier que les `features` concernées — pas de régénération complète) → `create_merge_request` → **`create_merge_request_note` obligatoire** (briefing) → `update_merge_request` reviewers **`iamRabia_N`**, **`clementfilisetti`**. **Interdit:** commit/push sur `main` sans MR.
+- **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate before each catalog publish; **Web vs IDE** availability may differ.
+- Deliverable: Duo complements **CI**; job **`navsecops_mr`** sur MR qui touche `.geojson` inchangé.
 
 ---
 
@@ -203,6 +203,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-22 | Phase 1 merged (MR !3): `/api/v1/navsecops/analyze`, auth module, docs, `.env` hygiene. |
 | 2026-03-23 | Phase 3: SQLite store, `sync-report`, `GET /reports`, optional `NAVSECOPS_SYNC_ENABLED` CI. Phase 4: `proxy_server.py` routes for `/api/v1/navsecops/*` and `/duo/*`. |
 | 2026-03-24 | Phase 2B: Duo YAML — pasted GeoJSON vs `main`, skipper comparative format, optional `create_commit` / MR / reviewers / note tools; tag `backup/flow-yaml-avant-toolset` + roadmap §9 (Duo catalog). |
+| 2026-03-24 | Phase 2B+: Captain short-message mode, MR-only Git (no `main` direct), mandatory MR briefing note, reviewers `iamRabia_N` + `clementfilisetti`, minimal GeoJSON edits; §9.6. |
 
 ---
 
@@ -217,7 +218,7 @@ Documented decisions above. No code deliverable.
 ### 9.2 Republication checklist (hackathon)
 
 1. Merge or push YAML changes on the canonical branch.
-2. Create a **new git tag** for catalog sync if the hackathon requires it (e.g. bump from `navsecops-catalog-berry-mappemonde-2026`).
+2. Create a **new git tag** for catalog sync if the hackathon requires it (e.g. bump `navsecops-catalog-berry-mappemonde-2026-v2` → `navsecops-catalog-berry-mappemonde-2026-v3` after captain-mode prompt changes).
 3. Run **agent/flow validation** in GitLab CI if enabled for the project.
 4. Publish/sync the **agent** and **flow** catalog items in the Duo UI.
 5. Update `.ai-catalog-mapping.json` with new `definition_hash` / `synced_at` / `git_tag` after GitLab returns post-sync metadata.
@@ -226,7 +227,8 @@ Documented decisions above. No code deliverable.
 
 - Paste GeoJSON **identical** to `main` → short confirmation, no unsolicited MR/commit.
 - Paste **different** GeoJSON → comparative briefing, no meta-hackathon wording.
-- With explicit “open MR” request → `create_commit` / MR path; if blocked, agent falls back to patch + manual steps.
+- **Captain phrase** (e.g. SPM after Nouméa) → `get_repository_file`; avant/après + noms fichier; clarifications if ambiguous; **no** Git until explicit confirmation of parcours.
+- After **explicit** “yes” to repo integration → branch commit (not `main`) → MR → **MR note** with briefing → reviewers `iamRabia_N` + `clementfilisetti` (or manual assign).
 - **Non-regression:** open MR touching `.geojson` → `navsecops_mr` still runs and posts the API-driven note as before.
 
 ### 9.4 Plan B (permissions / API limits)
@@ -237,4 +239,13 @@ Documented decisions above. No code deliverable.
 
 ### 9.5 Reviewers parameterization
 
-- Prompts instruct the model to use **usernames the user states** for `update_merge_request`. Document actual GitLab `@username` values for Rabia and Clément in the project wiki or team notes — do not hard-code in the repo if handles differ per fork.
+- Default reviewers in YAML: **`iamRabia_N`**, **`clementfilisetti`**. On a fork with different handles, adjust prompts or assign manually (Plan B).
+
+### 9.6 Captain mode vs paste — MR-only summary
+
+| Mode | Trigger | Git |
+|------|---------|-----|
+| **Paste** | Large GeoJSON in message | Compare to `main`; MR tools only after explicit confirm; MR-only policy applies. |
+| **Captain** | Short operational instruction, no big JSON | Load canon; clarifications; readable proposal; confirm parcours → same MR-only chain. |
+
+**Minimal GeoJSON edit:** start from full canonical `get_repository_file` output; change only affected `features`; never rewrite the whole FeatureCollection from scratch in the model. **CI:** MR with `.geojson` diff still triggers **`navsecops_mr`** (`.gitlab-ci.yml` unchanged).

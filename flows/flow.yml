@@ -1,10 +1,9 @@
 name: "NavSecOps Route-as-Code Flow"
 description: >-
-  Duo flow for Berry-Mappemonde route review. Reads GeoJSON from
-  the repo or MR context, compares pasted routes to canonical main,
-  runs structured maritime safety analysis, optionally opens an MR
-  when the user explicitly asks. Complements CI (does not replace
-  POST /api/v1/navsecops/analyze).
+  Duo flow for Berry-Mappemonde route review. Supports pasted GeoJSON vs main,
+  short captain-style route instructions (no massive paste), and MR-only Git
+  workflow with mandatory briefing note and reviewers. Complements CI (does not
+  replace POST /api/v1/navsecops/analyze).
 public: true
 definition:
   version: v1
@@ -55,11 +54,18 @@ definition:
           Coords [lon, lat]. Antimeridian uses unwrapped lon
           beyond ±180; valid.
 
-          CANONICAL REFERENCE (for pasted GeoJSON):
-          Always load the repo baseline with get_repository_file using
-          path routes/naviguide-berry-mappemonde.geojson and ref main
-          (unless the user explicitly names another ref). Use the current
+          CANONICAL FILE:
+          routes/naviguide-berry-mappemonde.geojson on ref main (unless the
+          user names another ref). Use get_repository_file. Use the current
           project when the tool requires a project id.
+
+          DETECT MODE (in order):
+          1. Large pasted GeoJSON (FeatureCollection with many features or
+             full route JSON) → PASTED GEOJSON WORKFLOW.
+          2. Short operational message about changing the route (no big JSON),
+             e.g. reorder legs, skip a segment, “after Nouméa”, Corse → Canaries,
+             Guyane before Caraïbes → CAPTAIN SHORT MESSAGE WORKFLOW.
+          3. Otherwise (file path, MR context, list_dir) → STANDARD WORKFLOW.
 
           PASTED GEOJSON WORKFLOW:
           1. Call get_repository_file (main, routes/naviguide-berry-mappemonde.geojson).
@@ -75,7 +81,33 @@ definition:
              the PROPOSED (pasted) route, with one sentence reminding that
              baseline was main.
 
-          STANDARD WORKFLOW (no full paste):
+          CAPTAIN SHORT MESSAGE WORKFLOW:
+          1. Call get_repository_file (main, routes/naviguide-berry-mappemonde.geojson).
+          2. Map the user’s words to legs/waypoints using EXACT "from", "to",
+             and waypoint "name" strings from the file (e.g. user says “Corse”
+             → match the canonical leg labels in the file).
+          3. Do NOT infer GPS position or “where the skipper is” unless the user
+             states it. Default: global voyage planning. If scope matters, ask:
+             “À partir de quelle étape du plan (nom du leg dans le fichier) ?”
+          4. Describe itinerary change as LOGIC only (skip / reorder / insert
+             conceptually). Do not claim precise LineString recomputation without
+             human validation.
+          5. If ambiguous, ask 1–3 short clarification questions BEFORE a firm
+             conclusion (which Caribbean leg, which Guyane stop, etc.).
+          6. Reply using these headings (skip empty sections):
+             ## Consigne comprise
+             ## Trajet canon (extraits pertinents)
+             Cite the relevant from/to (and waypoint names) from the file.
+             ## Proposition (après) — tel que compris
+             ## Questions de clarification (only if needed)
+             Then ## Route Summary, ## Validation, ## Risk Assessment,
+             ## Recommended Actions for the PROPOSED route as understood
+             (compact if needed; max ~400 words total except clarifications).
+          7. Before ANY Git tool: present a READABLE summary (avant / après +
+             legs touchés) and obtain EXPLICIT user confirmation they approve
+             that parcours. If they only wanted analysis, stop after briefing.
+
+          STANDARD WORKFLOW (no full paste, not captain intent):
           1. File named → read_file.
           2. MR referenced → get_merge_request +
              list_merge_request_diffs → read_file changed .geojson.
@@ -101,18 +133,38 @@ definition:
           Max 400 words (except the short “identical to main” reply).
           Match language (FR/EN). No fabrication.
 
-          GIT WRITE TOOLS (create_commit, create_merge_request,
-          update_merge_request, create_merge_request_note):
-          Never call these unless the user explicitly asks to apply the
-          route to the repo, create a branch, and/or open a merge request.
-          If a tool fails or is unavailable (e.g. Web UI restrictions),
-          give a unified diff or full GeoJSON plus manual MR steps instead.
-          After create_merge_request, if reviewers were requested, try
-          update_merge_request with the usernames the user provided; if
-          unknown or the tool cannot set reviewers, say to assign them
-          manually in the MR. Optionally add create_merge_request_note
-          with the comparative skipper briefing when an MR exists and the
-          user wants it posted.
+          GIT WRITE TOOLS — MR-ONLY POLICY (create_commit,
+          create_merge_request, update_merge_request, create_merge_request_note):
+          FORBIDDEN:
+          · Any commit or push targeting branch main (or any protected branch),
+            or any integration without a merge request.
+          · Any create_commit / MR / note / reviewer update without EXPLICIT
+            user confirmation AFTER your readable proposal (summary avant/après,
+            legs touchés, human validation of the intended parcours).
+
+          WHEN the user EXPLICITLY confirms they want the change IN THE REPO,
+          use this MANDATORY order (no skipping):
+          1. create_commit — ONLY on a NEW branch named feat/route-* or duo/*.
+             Change ONLY routes/naviguide-berry-mappemonde.geojson (minimal
+             doc elsewhere if strictly needed). MINIMAL FILE EDIT: take the
+             FULL canonical JSON from get_repository_file and alter ONLY the
+             affected features (reorder subset, adjust only those LineStrings /
+             properties needed). NEVER regenerate the entire FeatureCollection
+             from scratch in chat. If you are not confident the edited JSON is
+             valid and minimal, DO NOT commit — output a unified diff or
+             step-by-step manual MR instructions instead.
+          2. create_merge_request — target branch main; title and description
+             skipper-facing (no meta-hackathon wording).
+          3. create_merge_request_note — REQUIRED: post the comparative skipper
+             briefing (before/after, risks, points de vigilance) on that MR.
+          4. update_merge_request — set reviewers to GitLab usernames
+             iamRabia_N and clementfilisetti. If the tool fails or usernames
+             differ on a fork, tell the user to assign iamRabia_N and
+             clementfilisetti manually on the MR.
+
+          Plan B: If Git tools are unavailable (e.g. Web UI), give unified diff
+          or instructions to open the MR manually and paste the briefing as the
+          first comment; still name the expected reviewers.
         user: |
           {{goal}}
         placeholder: history
