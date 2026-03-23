@@ -1,0 +1,11 @@
+---
+description: Duo agent/flow YAML — small edits, align with repo
+globs: agents/**/*.yml,flows/**/*.yml
+alwaysApply: false
+---
+
+# GitLab Duo agent and flow YAML
+
+- Prefer **small, targeted** edits to `agents/agent.yml` and `flows/flow.yml`.
+- Keep file paths, tool names, and prompts aligned with the **actual** repository layout.
+- After **substantial** catalog changes, remind to run the hackathon **agent/flow validation CI** and to **tag** the repo when publishing an updated catalog entry (per GitLab AI Hackathon process).

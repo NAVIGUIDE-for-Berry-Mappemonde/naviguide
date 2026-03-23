@@ -1,0 +1,10 @@
+---
+description: naviguide-api — English comments and existing patterns
+globs: naviguide-api/**/*.py
+alwaysApply: false
+---
+
+# naviguide-api Python
+
+- Write **comments and docstrings in English** (shared with other developers).
+- Match existing style and structure in `naviguide-api/main.py` and neighboring routers (imports, logging, FastAPI patterns).
