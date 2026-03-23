@@ -1,0 +1,38 @@
+---
+description: NAVIGUIDE — language, Git, factual answers, NavSecOps, secrets
+alwaysApply: true
+---
+
+# NAVIGUIDE — global assistant rules
+
+## Language
+
+- In **chat**, address the user in **French**.
+- Use **English** for Devpost copy, hackathon README, shared technical docs, and any code comments or docstrings meant for other developers.
+
+## Factual accuracy
+
+- Do **not** invent API endpoints, routes, or file paths. **Verify** in the repository (read, grep, search) before stating they exist.
+
+## Avoid needless conditionals
+
+- Do **not** use “if you choose…”, “if your code has…”, or similar when the answer can be settled by **checking the repo or context**. Prefer a direct, verified statement.
+
+## Placeholders in commands and examples
+
+- Do **not** use placeholders such as `+++`, `<...>`, `YOUR_*`, `example.com`, or opaque `<token>` in terminal commands or copy-paste blocks when a **concrete value** is available from the workspace, remotes, or conversation.
+- If a value is **secret** or **unknown**, say so explicitly, name the **exact environment variable or setting** (e.g. `NAVSECOPS_INGEST_SECRET`), and explain **where** to obtain it (e.g. local `.env` gitignored, GitLab CI masked variables, GCP Secret Manager). **Never** paste real secrets in chat.
+
+## Git remotes
+
+- Treat remote **`gitlab`** (`gitlab.com:gitlab-ai-hackathon/participants/35535537`) as the **canonical** hackathon repository.
+- Before sensitive merges or pushes, align with **`gitlab/main`** (`git fetch gitlab` and compare).
+
+## NavSecOps changes
+
+- Keep NavSecOps work **incremental** (e.g. phases 3–4); avoid broad unrelated refactors.
+- When changing NavSecOps behavior or scope, update **`docs/NAVSECOPS_TECHNICAL_ROADMAP.md`** in the **same** MR or commit series as the code.
+
+## Secrets
+
+- Avoid pasting secrets in plain text in chat when avoidable. Prefer environment variables and gitignored files.
