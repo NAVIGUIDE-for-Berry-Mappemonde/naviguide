@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-23 (Phases 3–4: persistence + proxy).
+**Last updated:** 2026-03-24 (Duo: GeoJSON vs `main` + optional Git write path).
 
 ---
 
@@ -36,7 +36,7 @@ flowchart LR
   CI --> Sync
   Sync --> DB
   GET --> DB
-  Duo -.->|read tools only; no generic HTTP| Comment
+  Duo -.->|optional Git MR tools; no generic HTTP to NAVIGUIDE| Comment
   Comment -.-> WH
   WH -.-> Sync
   Legacy --- A
@@ -55,7 +55,7 @@ flowchart LR
 | **NavSecOps persistence (Phase 3)** | `naviguide-api/naviguide_navsecops_store.py` (SQLite), `naviguide-api/naviguide_navsecops_sync.py`: `POST /sync-report`, `GET /reports`, `GET /reports/{id}`. |
 | **FastAPI entry** | `naviguide-api/main.py` — includes `duo_router`, `navsecops_router`, `navsecops_sync_router` under `/api/v1/navsecops`. |
 | **LLM helpers** | `naviguide_workspace/llm_utils.py` — same `sys.path` pattern as `naviguide_duo.py` for imports from `naviguide-api`. |
-| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — read tools plus MR/repo tools (`get_merge_request`, `list_merge_request_diffs`, `list_dir`, `get_repository_file`). |
+| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — read/MR/repo tools plus optional Git tools: `create_commit`, `create_merge_request`, `update_merge_request`, `create_merge_request_note` (see §9). Does **not** call `POST /api/v1/navsecops/analyze`; CI + local `curl` guide remain primary. |
 | **Proxy** | `proxy_server.py` — `/api/v1/navsecops/*` and `/duo/*` → `API_BACKEND` before orchestrator (Phase 4). |
 | **Docs** | `docs/NAVSECOPS_PR_MATRIX.md` — API contract, curl, errors (Phases 1, 3, 4). |
 
@@ -67,7 +67,7 @@ flowchart LR
 
 - **Why:** The hackathon MCP catalog (e.g. Linear, Atlassian, Context7) does **not** provide a generic authenticated HTTP client to our API. A custom agent limited to **read_file / read_files** cannot reliably `POST` to NavSecOps.
 - **Therefore:** **GitLab CI** (`curl` or shell + masked variables) calls `POST /api/v1/navsecops/analyze`, posts the **MR note** via GitLab API, and optionally calls **sync** (Phase 3).
-- **Duo’s role:** Publish a **custom agent or flow** in the hackathon group with MR-oriented triggers and read tools—context, narrative, pointing at or summarizing the **CI-generated** report—not replacing the HTTP call.
+- **Duo’s role:** Publish a **custom agent or flow** in the hackathon group with MR/repo context, **comparison of pasted GeoJSON to `routes/naviguide-berry-mappemonde.geojson` on `main`**, skipper-facing briefings, and **optional** Git operations when the user explicitly requests a branch/MR. Duo still does **not** perform authenticated HTTP to NAVIGUIDE; **CI + the PDF/local guide** remain the reliable path for `POST /api/v1/navsecops/analyze` and MR notes from the pipeline.
 - **One-liner:** *The Duo agent does not replace the HTTP call to NAVIGUIDE; CI performs the API call and MR comment; Duo provides trigger, context, and the “agent on GitLab” experience.*
 
 ### Decision 2 — Host the hackathon API on GCP
@@ -134,10 +134,12 @@ Documented decisions above. No code deliverable.
 | **Secrets (CI)** | `NAVSECOPS_BASE_URL`, `NAVSECOPS_INGEST_SECRET`, `GITLAB_TOKEN` or `CI_JOB_TOKEN` for notes—masked/protected. |
 | **Optional sync (Phase 3)** | Set `NAVSECOPS_SYNC_ENABLED=1` to POST `sync-report` after the note; failures fail the job when enabled. |
 
-#### Phase 2B — Duo agent / flow (stretch)
+#### Phase 2B — Duo agent / flow ✅ ENRICHED (2026-03-24)
 
-- Update `agents/agent.yml` / `flows/flow.yml`: summarize route from read tools; **do not** assume a catalog HTTP tool to NAVIGUIDE; complement CI report.
-- Deliverable: demo MR showing agent comment **in addition to** CI.
+- **`agents/agent.yml` / `flows/flow.yml`:** Pasted GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → if diff, comparative skipper briefing (`## Écart par rapport au tracé canonique (main)` + standard sections); **no** catalog HTTP to NAVIGUIDE.
+- **Optional Git path (user must explicitly ask):** `create_commit` → `create_merge_request` → `update_merge_request` (reviewers if user provides GitLab usernames) → optional `create_merge_request_note` with briefing.
+- **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate against the live doc and **Web vs IDE** availability before each catalog publish; rename in YAML if the platform exposes different identifiers.
+- Deliverable: Duo complements **CI**; MR intelligence report from **`scripts/gitlab_mr_navsecops.sh`** remains unchanged.
 
 ---
 
@@ -181,7 +183,7 @@ Documented decisions above. No code deliverable.
 3. Phase 2A ✅ (CI + MR comment)  
 4. Phase 3 ✅ (sync from CI optional + SQLite + GET)  
 5. Phase 4 ✅ (proxy); UI still optional  
-6. Phase 2B (Duo enrichment) if time / catalog allows.  
+6. Phase 2B (Duo enrichment) ✅ catalog YAML updated; republication + tests per §9.  
 7. Phase 5 (hardening + submission assets).
 
 ---
@@ -200,3 +202,39 @@ Documented decisions above. No code deliverable.
 |------|-----------|
 | 2026-03-22 | Phase 1 merged (MR !3): `/api/v1/navsecops/analyze`, auth module, docs, `.env` hygiene. |
 | 2026-03-23 | Phase 3: SQLite store, `sync-report`, `GET /reports`, optional `NAVSECOPS_SYNC_ENABLED` CI. Phase 4: `proxy_server.py` routes for `/api/v1/navsecops/*` and `/duo/*`. |
+| 2026-03-24 | Phase 2B: Duo YAML — pasted GeoJSON vs `main`, skipper comparative format, optional `create_commit` / MR / reviewers / note tools; tag `backup/flow-yaml-avant-toolset` + roadmap §9 (Duo catalog). |
+
+---
+
+## 9. Duo catalog — rollback, republication, Plan B
+
+### 9.1 Backup before risky YAML changes
+
+- **Git tag (pre–write-toolset baseline):** `backup/flow-yaml-avant-toolset` at commit `62a4fb8e785a14f77fadb4c285e7072c0b04fd35`.
+- **Catalog definition hashes before next GitLab sync** (from `.ai-catalog-mapping.json`): agent `791a62d6953b0cc5`, flow `073663312359001e`.
+- **Rollback:** `git checkout backup/flow-yaml-avant-toolset -- flows/flow.yml agents/agent.yml` (or revert the bump commit), republish the Duo catalog entry to match, and record the restored commit hash.
+
+### 9.2 Republication checklist (hackathon)
+
+1. Merge or push YAML changes on the canonical branch.
+2. Create a **new git tag** for catalog sync if the hackathon requires it (e.g. bump from `navsecops-catalog-berry-mappemonde-2026`).
+3. Run **agent/flow validation** in GitLab CI if enabled for the project.
+4. Publish/sync the **agent** and **flow** catalog items in the Duo UI.
+5. Update `.ai-catalog-mapping.json` with new `definition_hash` / `synced_at` / `git_tag` after GitLab returns post-sync metadata.
+
+### 9.3 Manual verification (post-publish)
+
+- Paste GeoJSON **identical** to `main` → short confirmation, no unsolicited MR/commit.
+- Paste **different** GeoJSON → comparative briefing, no meta-hackathon wording.
+- With explicit “open MR” request → `create_commit` / MR path; if blocked, agent falls back to patch + manual steps.
+- **Non-regression:** open MR touching `.geojson` → `navsecops_mr` still runs and posts the API-driven note as before.
+
+### 9.4 Plan B (permissions / API limits)
+
+- **`update_merge_request` cannot set reviewers:** finish with MR link; assign Rabia and Clément manually (or use a PAT + GitLab API outside Duo — do not change `scripts/gitlab_mr_navsecops.sh` for this).
+- **`create_commit` denied** (push rules, protected branches, missing IDE/Web tool): reply with unified diff or full GeoJSON + instructions to branch/MR manually.
+- **`create_merge_request_note` blocked:** paste briefing into MR description or a manual note (same fallback as the PDF guide).
+
+### 9.5 Reviewers parameterization
+
+- Prompts instruct the model to use **usernames the user states** for `update_merge_request`. Document actual GitLab `@username` values for Rabia and Clément in the project wiki or team notes — do not hard-code in the repo if handles differ per fork.
