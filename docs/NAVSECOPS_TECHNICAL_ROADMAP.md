@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-22 (Phase 1 merged).
+**Last updated:** 2026-03-23 (Phases 3–4: persistence + proxy).
 
 ---
 
@@ -42,7 +42,7 @@ flowchart LR
   Legacy --- A
 ```
 
-**Note:** For demos, `proxy_server.py` does **not** currently proxy `/duo/*` or `/api/v1/navsecops/*` to the API; add explicit proxy routes if testing through the unified proxy binary.
+**Note:** `proxy_server.py` proxies `/api/v1/navsecops/*` and `/duo/*` to `API_BACKEND` (naviguide-api) **before** the `/api/v1/*` orchestrator catch-all (Phase 4).
 
 ---
 
@@ -52,11 +52,12 @@ flowchart LR
 |------|-------------------|
 | **Multi-LLM (legacy three-step API)** | `naviguide-api/naviguide_duo.py`: `POST /duo/validate`, `/duo/risk` (Gemini via `naviguide_workspace/llm_utils.py`), `POST /duo/briefing` (Claude). |
 | **Single-pass NavSecOps (Phase 1)** | `naviguide-api/naviguide_navsecops_pipeline.py`: `POST /api/v1/navsecops/analyze`. Auth: `naviguide-api/naviguide_navsecops_auth.py` (`NAVSECOPS_INGEST_SECRET`). |
-| **FastAPI entry** | `naviguide-api/main.py` — includes `duo_router` and `navsecops_router`. |
+| **NavSecOps persistence (Phase 3)** | `naviguide-api/naviguide_navsecops_store.py` (SQLite), `naviguide-api/naviguide_navsecops_sync.py`: `POST /sync-report`, `GET /reports`, `GET /reports/{id}`. |
+| **FastAPI entry** | `naviguide-api/main.py` — includes `duo_router`, `navsecops_router`, `navsecops_sync_router` under `/api/v1/navsecops`. |
 | **LLM helpers** | `naviguide_workspace/llm_utils.py` — same `sys.path` pattern as `naviguide_duo.py` for imports from `naviguide-api`. |
-| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — `read_file` / `read_files` only today. |
-| **Proxy** | `proxy_server.py` — extend for `/duo/{path}` and `/api/v1/navsecops/{path}` when needed (Phase 4). |
-| **Docs** | `docs/NAVSECOPS_PR_MATRIX.md` — API contract, curl, errors (updated in Phase 1). |
+| **Duo catalog (hackathon)** | `agents/agent.yml`, `flows/flow.yml` — read tools plus MR/repo tools (`get_merge_request`, `list_merge_request_diffs`, `list_dir`, `get_repository_file`). |
+| **Proxy** | `proxy_server.py` — `/api/v1/navsecops/*` and `/duo/*` → `API_BACKEND` before orchestrator (Phase 4). |
+| **Docs** | `docs/NAVSECOPS_PR_MATRIX.md` — API contract, curl, errors (Phases 1, 3, 4). |
 
 ---
 
@@ -119,18 +120,19 @@ Documented decisions above. No code deliverable.
 
 **Goal:** On MRs that touch route files, post an **Intelligence Report** on the MR.
 
-#### Phase 2A — GitLab CI (primary / reliable) 🔜 NEXT
+#### Phase 2A — GitLab CI (primary / reliable) ✅ DELIVERED
 
 | Item | Detail |
 |------|--------|
-| **Where** | Root `.gitlab-ci.yml`; optional `scripts/gitlab_mr_navsecops.sh`. |
-| **When** | `merge_request_pipeline` / `merge_request_event`; `rules:changes` on e.g. `routes/**/*.geojson`, `data/**/*.geojson`. |
-| **Steps** | Resolve target GeoJSON (**convention** + optional `NAVSECOPS_ROUTE_FILE` CI variable—avoid blind `head -1` on diff); build JSON body with **`jq`** (never shell-concatenate raw GeoJSON into JSON). |
-| **Call** | `curl --max-time 90` (or higher) to `NAVSECOPS_BASE_URL/api/v1/navsecops/analyze` with Bearer. |
+| **Where** | Root `.gitlab-ci.yml`; `scripts/gitlab_mr_navsecops.sh`. |
+| **When** | `merge_request_pipeline` / `merge_request_event` (see `.gitlab-ci.yml` rules). |
+| **Steps** | Resolve target GeoJSON (**convention** + optional `NAVSECOPS_ROUTE_FILE` CI variable); build JSON body with **`jq`**. |
+| **Call** | `curl --max-time 120` to `NAVSECOPS_BASE_URL/api/v1/navsecops/analyze` with Bearer. |
 | **Technical success** | Treat **non-2xx** as job failure (include **422**). Do **not** fail on `status: partial` in a **200** response (Decision 3). |
 | **MR note** | GitLab API `POST .../merge_requests/:iid/notes` with markdown + optional `<details>` raw JSON. |
-| **Observability** | `artifacts: when: always` with `navsecops-response.json` and timing metadata. |
-| **Secrets (CI)** | `NAVSECOPS_BASE_URL`, `NAVSECOPS_INGEST_SECRET`, `GITLAB_TOKEN` or appropriately scoped token for notes—masked/protected. |
+| **Observability** | `artifacts: when: always` with `navsecops-response.json`, `navsecops-timing.json`, `navsecops-sync-response.json`. |
+| **Secrets (CI)** | `NAVSECOPS_BASE_URL`, `NAVSECOPS_INGEST_SECRET`, `GITLAB_TOKEN` or `CI_JOB_TOKEN` for notes—masked/protected. |
+| **Optional sync (Phase 3)** | Set `NAVSECOPS_SYNC_ENABLED=1` to POST `sync-report` after the note; failures fail the job when enabled. |
 
 #### Phase 2B — Duo agent / flow (stretch)
 
@@ -139,29 +141,26 @@ Documented decisions above. No code deliverable.
 
 ---
 
-### Phase 3 — Persist reports (sync + storage) 🔜
+### Phase 3 — Persist reports (sync + storage) ✅ DELIVERED (2026-03-23)
 
 **Goal:** Store structured history for app / auditors.
 
-**MVP recommendation:** **Final step of Phase 2A CI** calls `POST /api/v1/navsecops/sync-report` (skip GitLab **webhook** for hackathon MVP—easier to debug).
+**Implemented:**
+- **SQLite** at `naviguide-api/var/navsecops.db` via `naviguide_navsecops_store.py` (`init_db`, `upsert_report`, `list_reports`, `get_report_by_id`).
+- `POST /api/v1/navsecops/sync-report` — Pydantic body; same Bearer as `analyze`; upsert on `(project_id, merge_request_iid, source_commit_sha)`.
+- `GET /api/v1/navsecops/reports` — paginated list (`project_id`, `limit`, `offset` query params); responses contain **no secrets**.
+- `GET /api/v1/navsecops/reports/{report_id}` — single row including parsed `raw_analysis` when stored.
+- **CI (optional):** `NAVSECOPS_SYNC_ENABLED=1` in `scripts/gitlab_mr_navsecops.sh` after MR note; non-2xx fails the job when enabled.
+- **Docs:** `docs/NAVSECOPS_PR_MATRIX.md` Phase 3 section.
 
-**API:**
-- `POST /api/v1/navsecops/sync-report` — payload: `project_id`, `merge_request_iid`, `source_commit_sha`, route key / file path, `report_markdown`, optional `raw_analysis` (mind **payload size** vs shell `jq`).
-- Auth: same Bearer (or aligned secret).
-
-**Storage:**
-- MVP: **SQLite** under `naviguide-api/var/` (gitignored). **Cloud Run caveat:** filesystem is **ephemeral**—acceptable for short demo windows; use **Cloud SQL** or **GCS** for durable production.
-
-**Idempotency:** Unique key on `(project_id, merge_request_iid, commit_sha)` — upsert or skip on retry.
-
-**Read API (minimal):** `GET /api/v1/navsecops/reports` and/or `GET .../reports/{id}`.
+**Cloud Run caveat:** ephemeral disk — same as matrix; production = Cloud SQL / GCS / etc.
 
 ---
 
-### Phase 4 — Proxy + UI (stretch for hackathon)
+### Phase 4 — Proxy (+ UI stretch) — proxy ✅ DELIVERED (2026-03-23)
 
-- **Proxy:** `proxy_server.py` — proxy `/duo/{path:path}` and `/api/v1/navsecops/{path:path}` to `API_BACKEND` before static catch-all.
-- **UI:** Tab/panel calling `GET .../reports` with **sanitized** markdown rendering; if SPA lives elsewhere, document contract in `docs/` (e.g. `NAVSECOPS_UI.md`).
+- **Proxy:** `proxy_server.py` routes `/api/v1/navsecops/{path:path}` and `/duo/{path:path}` to `API_BACKEND` **before** the orchestrator `/api/v1/{path}` catch-all; polar and routing prefixes unchanged.
+- **UI:** Not implemented; contract for `GET /reports` remains in `NAVSECOPS_PR_MATRIX.md` for a future panel or external SPA.
 
 ---
 
@@ -179,9 +178,9 @@ Documented decisions above. No code deliverable.
 
 1. Phase 0 ✅  
 2. Phase 1 ✅  
-3. **Phase 2A** (CI + MR comment) — fastest path to end-to-end demo.  
-4. Phase 3 (sync from CI + SQLite + GET).  
-5. Phase 4 (proxy + UI or docs-only contract).  
+3. Phase 2A ✅ (CI + MR comment)  
+4. Phase 3 ✅ (sync from CI optional + SQLite + GET)  
+5. Phase 4 ✅ (proxy); UI still optional  
 6. Phase 2B (Duo enrichment) if time / catalog allows.  
 7. Phase 5 (hardening + submission assets).
 
@@ -200,3 +199,4 @@ Documented decisions above. No code deliverable.
 | Date | Milestone |
 |------|-----------|
 | 2026-03-22 | Phase 1 merged (MR !3): `/api/v1/navsecops/analyze`, auth module, docs, `.env` hygiene. |
+| 2026-03-23 | Phase 3: SQLite store, `sync-report`, `GET /reports`, optional `NAVSECOPS_SYNC_ENABLED` CI. Phase 4: `proxy_server.py` routes for `/api/v1/navsecops/*` and `/duo/*`. |

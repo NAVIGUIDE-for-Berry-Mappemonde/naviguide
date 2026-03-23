@@ -708,9 +708,11 @@ app.add_middleware(
 
 from naviguide_duo import router as duo_router  # noqa: E402
 from naviguide_navsecops_pipeline import router as navsecops_router  # noqa: E402
+from naviguide_navsecops_sync import router as navsecops_sync_router  # noqa: E402
 
 app.include_router(duo_router)
 app.include_router(navsecops_router, prefix="/api/v1/navsecops")
+app.include_router(navsecops_sync_router, prefix="/api/v1/navsecops")
 
 
 class PositionRequest(BaseModel):

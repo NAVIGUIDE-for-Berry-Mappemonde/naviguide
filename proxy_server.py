@@ -4,12 +4,14 @@ Serves the React frontend as static files and proxies API calls
 to the backend services running internally.
 
 Routes proxied:
-  GET  /route              → naviguide-api     :8000
-  POST /wind               → naviguide-api     :8000
-  POST /wave               → naviguide-api     :8000
-  POST /current            → naviguide-api     :8000
+  GET  /route              → naviguide-api     :8001
+  POST /wind               → naviguide-api     :8001
+  POST /wave               → naviguide-api     :8001
+  POST /current            → naviguide-api     :8001
   *    /api/v1/polar/*     → polar-api         :8004
   *    /api/v1/routing/*   → weather-routing   :3010
+  *    /api/v1/navsecops/* → naviguide-api     :8001
+  *    /duo/*              → naviguide-api     :8001
   *    /api/v1/*           → naviguide-orch    :3008
   *                        → static frontend   (dist/)
 """
@@ -125,6 +127,15 @@ async def proxy_polar(request: Request, path: str):
 @app.api_route("/api/v1/routing/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy_weather_routing(request: Request, path: str):
     return await proxy_request(request, WEATHER_ROUTING_BACKEND, f"api/v1/routing/{path}")
+
+# ── NavSecOps + Duo (naviguide-api) — before orchestrator catch-all ───────────
+@app.api_route("/api/v1/navsecops/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_navsecops(request: Request, path: str):
+    return await proxy_request(request, API_BACKEND, f"api/v1/navsecops/{path}")
+
+@app.api_route("/duo/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def proxy_duo(request: Request, path: str):
+    return await proxy_request(request, API_BACKEND, f"duo/{path}")
 
 # ── Orchestrator routes ───────────────────────────────────────────────────────
 @app.api_route("/api/v1/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])

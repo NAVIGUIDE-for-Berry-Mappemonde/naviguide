@@ -12,6 +12,7 @@
 #
 # Optional env:
 #   NAVSECOPS_ROUTE_FILE      -- explicit path to .geojson (skips auto-detect)
+#   NAVSECOPS_SYNC_ENABLED    -- set to 1 to POST /api/v1/navsecops/sync-report after MR note
 #
 # Token priority for MR notes:
 #   1. GITLAB_TOKEN (PAT) -- always works for notes if scope is correct
@@ -154,3 +155,44 @@ if [[ "$NOTE_HTTP" -lt 200 || "$NOTE_HTTP" -ge 300 ]]; then
 fi
 
 echo "Report posted on MR (HTTP $NOTE_HTTP)"
+
+# -- 8. Optional: persist report via sync-report (Phase 3) ---------------
+if [[ "${NAVSECOPS_SYNC_ENABLED:-0}" == "1" ]]; then
+  NOTE_FILE=$(mktemp)
+  printf '%s' "$NOTE" > "$NOTE_FILE"
+  if ! SYNC_BODY=$(jq -n \
+    --argjson project_id "$CI_PROJECT_ID" \
+    --argjson merge_request_iid "$CI_MERGE_REQUEST_IID" \
+    --arg source_commit_sha "$CI_COMMIT_SHA" \
+    --arg route_file "$ROUTE_FILE" \
+    --rawfile report_markdown "$NOTE_FILE" \
+    --rawfile rawfile navsecops-response.json \
+    '{
+      project_id: $project_id,
+      merge_request_iid: $merge_request_iid,
+      source_commit_sha: $source_commit_sha,
+      route_file: $route_file,
+      report_markdown: $report_markdown,
+      raw_analysis: ($rawfile | fromjson)
+    }'); then
+    rm -f "$NOTE_FILE"
+    echo "ERROR: jq failed to build sync-report JSON body"
+    exit 1
+  fi
+  rm -f "$NOTE_FILE"
+
+  SYNC_HTTP=$(curl -sS -o navsecops-sync-response.json -w '%{http_code}' \
+    -X POST "${NAVSECOPS_BASE_URL}/api/v1/navsecops/sync-report" \
+    -H "Authorization: Bearer ${NAVSECOPS_INGEST_SECRET}" \
+    -H "Content-Type: application/json" \
+    --max-time 60 \
+    -d "$SYNC_BODY")
+
+  echo "sync-report responded: HTTP $SYNC_HTTP"
+  if [[ "$SYNC_HTTP" -lt 200 || "$SYNC_HTTP" -ge 300 ]]; then
+    echo "ERROR: sync-report failed"
+    cat navsecops-sync-response.json 2>/dev/null || true
+    exit 1
+  fi
+  echo "Report persisted via sync-report (HTTP $SYNC_HTTP)"
+fi
