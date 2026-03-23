@@ -18,6 +18,13 @@ alwaysApply: true
 
 - Do **not** use “if you choose…”, “if your code has…”, or similar when the answer can be settled by **checking the repo or context**. Prefer a direct, verified statement.
 
+## Terminal working directory
+
+- When the user pastes **terminal output** that includes a shell prompt (e.g. `hostname:directory username$` or similar), **infer the current working directory** from that prompt before giving `cd` instructions.
+- Typical macOS Terminal format: `HostName:basename user$` — the segment **after the colon and before the username** is often the **current directory basename** (e.g. `naviguide` means they are likely already inside a folder named `naviguide`).
+- **Do not** tell the user to `cd` into a directory they are **already in** according to the last prompt they shared. If the basename matches the project folder, assume they are in the right place unless the conversation shows otherwise.
+- If no recent terminal paste is available, use the **workspace root** from Cursor as the default assumption for paths and commands.
+
 ## Placeholders in commands and examples
 
 - Do **not** use placeholders such as `+++`, `<...>`, `YOUR_*`, `example.com`, or opaque `<token>` in terminal commands or copy-paste blocks when a **concrete value** is available from the workspace, remotes, or conversation.
