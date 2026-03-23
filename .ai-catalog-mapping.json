@@ -14,10 +14,17 @@
         }
       },
       "latest_sync": {
+<<<<<<< Updated upstream
         "git_tag": "backup/flow-yaml-avant-toolset",
         "catalog_version": "1.1.0",
         "synced_at": "2026-03-23T18:46:26.944Z",
         "definition_hash": "c6deb7d6ae9c3163"
+=======
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v2",
+        "catalog_version": "1.2.0",
+        "synced_at": "2026-03-23T19:01:18.508Z",
+        "definition_hash": "4e8ba31a7ce235d4"
+>>>>>>> Stashed changes
       }
     }
   },
@@ -35,10 +42,17 @@
         }
       },
       "latest_sync": {
+<<<<<<< Updated upstream
         "git_tag": "backup/flow-yaml-avant-toolset",
         "catalog_version": "1.1.0",
         "synced_at": "2026-03-23T18:46:27.690Z",
         "definition_hash": "dbb7fae5e56fa281"
+=======
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v2",
+        "catalog_version": "1.2.0",
+        "synced_at": "2026-03-23T19:01:19.101Z",
+        "definition_hash": "2f734c6ac185c235"
+>>>>>>> Stashed changes
       }
     }
   }
