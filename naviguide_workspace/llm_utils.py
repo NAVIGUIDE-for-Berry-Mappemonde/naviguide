@@ -62,21 +62,82 @@ def _get_gemini_client():
     return _gemini_client
 
 
+def _slice_first_balanced_json_object(text: str) -> Optional[str]:
+    """Extract substring from first '{' through matching '}' (string-aware)."""
+    i = text.find("{")
+    if i < 0:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for j in range(i, len(text)):
+        c = text[j]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return text[i : j + 1]
+    return None
+
+
+def _strip_markdown_code_fence(text: str) -> str:
+    """Remove optional ```json / ``` wrappers (handles missing closing fence)."""
+    t = text.strip()
+    t = re.sub(r"^```(?:json)?\s*", "", t, count=1, flags=re.IGNORECASE)
+    t = re.sub(r"\s*```\s*$", "", t).strip()
+    return t
+
+
 def _extract_json_object(text: str) -> Dict[str, Any]:
-    text = text.strip()
-    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+    """
+    Parse a JSON object from Gemini output: raw JSON, fenced ```json, or prose prefix.
+    """
+    original = text.strip()
+    candidates: list[str] = []
+
+    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", original, flags=re.IGNORECASE)
     if m:
-        text = m.group(1).strip()
-    try:
-        data = json.loads(text)
-        if isinstance(data, dict):
-            return data
-    except json.JSONDecodeError:
-        pass
-    raise ValueError(f"Gemini did not return valid JSON object: {text[:500]}...")
+        candidates.append(m.group(1).strip())
+    stripped = _strip_markdown_code_fence(original)
+    if stripped != original.strip() or not m:
+        candidates.append(stripped)
+    candidates.append(original)
+
+    for blob in (stripped, original):
+        balanced = _slice_first_balanced_json_object(blob)
+        if balanced and balanced not in candidates:
+            candidates.insert(0, balanced)
+
+    seen: set[str] = set()
+    for cand in candidates:
+        if not cand or cand in seen:
+            continue
+        seen.add(cand)
+        try:
+            data = json.loads(cand)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            continue
+
+    tail = stripped[:800] if stripped else original[:800]
+    raise ValueError(f"Gemini did not return valid JSON object: {tail}...")
 
 
-def _gemini_json(system: str, user: str) -> Dict[str, Any]:
+def _gemini_json(
+    system: str, user: str, *, max_output_tokens: int = 4096
+) -> Dict[str, Any]:
     from google.genai import types
 
     client = _get_gemini_client()
@@ -85,7 +146,7 @@ def _gemini_json(system: str, user: str) -> Dict[str, Any]:
         contents=user,
         config=types.GenerateContentConfig(
             system_instruction=system,
-            max_output_tokens=4096,
+            max_output_tokens=max_output_tokens,
             temperature=0.2,
         ),
     )
@@ -103,7 +164,8 @@ def duo_validate_route(geojson: Dict[str, Any]) -> Dict[str, Any]:
     """
     system = (
         "You are a maritime GIS validator for offshore sailing routes. "
-        "Reply with a single JSON object only, no markdown. "
+        "Reply with exactly one JSON object: raw JSON only, "
+        "no markdown, no code fences, no preamble or trailing commentary. "
         'Schema: {"valid": bool, "geometry_type": string, "waypoint_count": int, '
         '"issues": [string], "bbox_hint": {"min_lat": number, "max_lat": number, '
         '"min_lon": number, "max_lon": number} or null}. '
@@ -127,7 +189,8 @@ def duo_risk_assessment(geojson: Dict[str, Any]) -> Dict[str, Any]:
     system = (
         "You are NAVIGUIDE maritime risk analysis for a 13.5 m catamaran "
         "(draft 1.8 m, beam-reach optimised, crew of 2-4). "
-        "Output a single JSON object only, no markdown. "
+        "Output exactly one JSON object: raw JSON only, "
+        "no markdown, no code fences (no ```), no preamble or trailing commentary. "
         'Schema: {"overall_risk": "LOW"|"MODERATE"|"HIGH"|"CRITICAL", "risk_score": number 0-1, '
         '"segments": [{"label": string, "risk": string, "notes": string}], '
         '"piracy_notes": string, "weather_notes": string, "anti_shipping_notes": string, '
@@ -143,10 +206,11 @@ def duo_risk_assessment(geojson: Dict[str, Any]) -> Dict[str, Any]:
         "shallow water \u2014 1.8 m draft limits coral reef passages, "
         "flag segments near atolls, barrier reefs, or uncharted shoals; "
         "Southern Ocean below 40\u00b0S \u2014 extreme weather, no rescue infrastructure. "
-        "Use conservative assumptions if data is missing."
+        "Use conservative assumptions if data is missing. "
+        "Keep segments to at most 24 items; keep each notes field under 350 characters to stay concise."
     )
     user = f"Analyse risks for this expedition route GeoJSON:\n{json.dumps(geojson, ensure_ascii=False)[:120000]}"
-    return _gemini_json(system, user)
+    return _gemini_json(system, user, max_output_tokens=8192)
 
 
 def invoke_claude_briefing_from_analysis(
@@ -157,7 +221,7 @@ def invoke_claude_briefing_from_analysis(
     """Synthesis-only: Claude turns structured Gemini output into a skipper report."""
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
-        log.warning("[llm] ANTHROPIC_API_KEY not set — skipping Claude briefing")
+        log.warning("[llm] ANTHROPIC_API_KEY not set \u2014 skipping Claude briefing")
         return None
 
     lang = "English" if language.lower().startswith("en") else "French"
