@@ -122,7 +122,7 @@ gcloud run deploy naviguide-api \
   --platform=managed \
   --allow-unauthenticated \
   --port=8080 \
-  --memory=2Gi \
+  --memory=4Gi \
   --timeout=300 \
   --set-secrets=GEMINI_API_KEY=gemini-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest,NAVSECOPS_INGEST_SECRET=navsecops-ingest-secret:latest,COPERNICUS_USERNAME=copernicus-username:latest,COPERNICUS_PASSWORD=copernicus-password:latest \
   --set-env-vars=GEMINI_MODEL=gemini-2.5-pro
