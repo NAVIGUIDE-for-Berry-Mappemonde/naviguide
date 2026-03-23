@@ -102,10 +102,19 @@ def duo_validate_route(geojson: Dict[str, Any]) -> Dict[str, Any]:
     Returns a dict with keys like valid, issues, waypoint_count, geometry_type.
     """
     system = (
-        "You are a maritime GIS validator. Reply with a single JSON object only, no markdown. "
+        "You are a maritime GIS validator for offshore sailing routes. "
+        "Reply with a single JSON object only, no markdown. "
         'Schema: {"valid": bool, "geometry_type": string, "waypoint_count": int, '
         '"issues": [string], "bbox_hint": {"min_lat": number, "max_lat": number, '
-        '"min_lon": number, "max_lon": number} or null}.'
+        '"min_lon": number, "max_lon": number} or null}. '
+        "Checks to perform: "
+        "coordinates must be [lon, lat] order (lon -180..180, lat -90..90), "
+        "if any lat > 90 flag as likely swapped; "
+        "antimeridian crossings may use unwrapped lon beyond \u00b1180 (valid, not an error); "
+        "flag segments longer than 3000 nm (missing intermediate waypoints); "
+        "flag duplicate consecutive waypoints (< 0.001 deg apart); "
+        "geometry must be LineString or MultiLineString; "
+        "for FeatureCollection count LineString features as legs, Point features as waypoints."
     )
     user = f"Validate this GeoJSON for use as a sailing route (coordinates lon, lat order):\n{json.dumps(geojson, ensure_ascii=False)[:120000]}"
     return _gemini_json(system, user)
@@ -116,11 +125,25 @@ def duo_risk_assessment(geojson: Dict[str, Any]) -> Dict[str, Any]:
     High-level spatial risk digest (Gemini). Output is consumed by Claude for /duo/briefing.
     """
     system = (
-        "You are NAVIGUIDE maritime risk analysis. Output a single JSON object only, no markdown. "
+        "You are NAVIGUIDE maritime risk analysis for a 13.5 m catamaran "
+        "(draft 1.8 m, beam-reach optimised, crew of 2-4). "
+        "Output a single JSON object only, no markdown. "
         'Schema: {"overall_risk": "LOW"|"MODERATE"|"HIGH"|"CRITICAL", "risk_score": number 0-1, '
         '"segments": [{"label": string, "risk": string, "notes": string}], '
         '"piracy_notes": string, "weather_notes": string, "anti_shipping_notes": string, '
-        '"recommendations": [string]}. Use conservative assumptions if data is missing.'
+        '"recommendations": [string]}. '
+        "Risk knowledge: "
+        "piracy CRITICAL zones \u2014 Gulf of Aden (11-15\u00b0N 43-52\u00b0E), "
+        "Gulf of Guinea (0-5\u00b0N 2\u00b0W-8\u00b0E), Malacca Strait (1-4\u00b0N 100-104\u00b0E), "
+        "Sulu-Celebes Sea (5-8\u00b0N 118-125\u00b0E); "
+        "cyclone seasons \u2014 Atlantic Jun-Nov, S Pacific Nov-Apr, "
+        "N Indian Apr-Jun & Oct-Dec, S Indian Oct-May; "
+        "HIGH traffic \u2014 Bay of Biscay, English Channel, Gibraltar Strait, "
+        "Suez/Panama approaches, Torres Strait, Singapore Strait; "
+        "shallow water \u2014 1.8 m draft limits coral reef passages, "
+        "flag segments near atolls, barrier reefs, or uncharted shoals; "
+        "Southern Ocean below 40\u00b0S \u2014 extreme weather, no rescue infrastructure. "
+        "Use conservative assumptions if data is missing."
     )
     user = f"Analyse risks for this expedition route GeoJSON:\n{json.dumps(geojson, ensure_ascii=False)[:120000]}"
     return _gemini_json(system, user)
@@ -139,10 +162,20 @@ def invoke_claude_briefing_from_analysis(
 
     lang = "English" if language.lower().startswith("en") else "French"
     system = (
-        f"You are NAVIGUIDE's chief maritime safety officer. Write a concise skipper intelligence "
-        f"report in {lang} (max 320 words). Use exactly these section headings in order:\n"
-        "1. EXECUTIVE SUMMARY\n2. ROUTE VALIDATION\n3. KEY RISKS\n4. RECOMMENDED ACTIONS\n"
-        "Base every claim on the JSON facts provided; if data is missing, say so explicitly."
+        f"You are NAVIGUIDE's chief maritime safety officer for the "
+        f"Berry-Mappemonde circumnavigation (13.5 m catamaran, draft 1.8 m, "
+        f"crew 2-4, La Rochelle round-trip, 36 000 nm). "
+        f"Write a concise skipper intelligence report in {lang} (max 320 words). "
+        f"Use exactly these section headings in order:\n"
+        f"1. EXECUTIVE SUMMARY \u2014 overall risk level, go/no-go factors\n"
+        f"2. ROUTE VALIDATION \u2014 structural issues, coordinate quality, segment count\n"
+        f"3. KEY RISKS \u2014 ranked by severity, include lat/lon zones when available, "
+        f"note seasonal timing\n"
+        f"4. RECOMMENDED ACTIONS \u2014 numbered, actionable for offshore crew, "
+        f"include departure window advice when season data is available\n"
+        f"Base every claim on the JSON facts provided. "
+        f"If data is missing, state what is unknown rather than guessing. "
+        f"This report informs; it does not have authority to block departure."
     )
     payload = {"validation": validation or {}, "risk_analysis": analysis}
     prompt = f"Structured analysis JSON:\n{json.dumps(payload, ensure_ascii=False, indent=2)[:100000]}"
