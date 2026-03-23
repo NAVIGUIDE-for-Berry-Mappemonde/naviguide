@@ -1,109 +1,109 @@
 # NAVIGUIDE
 
-Assistant décisionnel pour la navigation maritime (projet **Berry-Mappemonde**). Ce dépôt contient l’API **FastAPI** (`naviguide-api`), le code partagé LLM (`naviguide_workspace`), le frontend React (`naviguide-app`), et la chaîne **NavSecOps** (analyse GeoJSON : Gemini + synthèse Claude).
+Decision-support assistant for maritime navigation (**Berry-Mappemonde** project). This repository contains the **FastAPI** API (`naviguide-api`), the shared LLM code (`naviguide_workspace`), the React frontend (`naviguide-app`), and the **NavSecOps** pipeline (GeoJSON analysis: Gemini + Claude synthesis).
 
 ---
 
-## Périmètre : image Docker vs stack complète
+## Scope: Docker image vs full stack
 
-| Mode | Contenu | Usage |
-|------|---------|--------|
-| **Image Docker** ([Dockerfile](Dockerfile) à la racine) | Copie uniquement `naviguide_workspace` + `naviguide-api`, lance `uvicorn main:app` | Cloud Run, test API isolée |
-| **Stack locale complète** | React, proxy, supervisord, plusieurs services | Développement intégré — voir [docs/MANUAL.md](docs/MANUAL.md) |
+| Mode | Contents | Usage |
+|------|----------|-------|
+| **Docker image** ([Dockerfile](Dockerfile) at root) | Copies only `naviguide_workspace` + `naviguide-api`, runs `uvicorn main:app` | Cloud Run, isolated API testing |
+| **Full local stack** | React, proxy, supervisord, multiple services | Integrated development — see [docs/MANUAL.md](docs/MANUAL.md) |
 
-L’image Docker **ne** démarre **pas** le frontend ni supervisord. Le port d’écoute est **`PORT`** (souvent **8080** en local, défini par Cloud Run en production).
+The Docker image does **not** start the frontend or supervisord. The listening port is **`PORT`** (typically **8080** locally, set by Cloud Run in production).
 
 ---
 
-## Prérequis
+## Prerequisites
 
-- **Python 3.12** (aligné sur le Dockerfile)
-- **Docker** pour builder / exécuter l’API
-- Sur **Mac Apple Silicon** : pour pousser une image vers **Cloud Run (linux/amd64)**, utiliser **`docker buildx`** avec `--platform linux/amd64` (le builder classique peut produire une image **arm64** incompatible → erreur `exec format error` sur GCP). Installer le plugin **buildx** si `docker buildx` est inconnu (`brew install docker-buildx` + lien dans `~/.docker/cli-plugins`).
+- **Python 3.12** (aligned with the Dockerfile)
+- **Docker** to build / run the API
+- On **Mac Apple Silicon**: to push an image to **Cloud Run (linux/amd64)**, use **`docker buildx`** with `--platform linux/amd64` (the classic builder may produce an **arm64** image incompatible with GCP → `exec format error`). Install the **buildx** plugin if `docker buildx` is unknown (`brew install docker-buildx` + symlink in `~/.docker/cli-plugins`).
 
 ---
 
 ## Configuration
 
-1. Copier le modèle : `cp naviguide-api/.env.example naviguide-api/.env`
-2. Renseigner au minimum (voir commentaires dans le fichier) :
+1. Copy the template: `cp naviguide-api/.env.example naviguide-api/.env`
+2. Fill in at minimum (see comments in the file):
 
-| Groupe | Variables |
-|--------|-----------|
+| Group | Variables |
+|-------|-----------|
 | Copernicus | `COPERNICUS_USERNAME`, `COPERNICUS_PASSWORD` |
-| Anthropic | `ANTHROPIC_API_KEY` — optionnel : `ANTHROPIC_MODEL` |
-| Google Gemini | `GEMINI_API_KEY` — optionnel : `GEMINI_MODEL` (défaut : `gemini-2.5-pro`), `GEMINI_SECRET_RESOURCE` (Secret Manager GCP) |
-| NavSecOps | `NAVSECOPS_INGEST_SECRET` (secret partagé pour le Bearer) |
-| Optionnel | `STORMGLASS_API_KEY`, `PORT` |
+| Anthropic | `ANTHROPIC_API_KEY` — optional: `ANTHROPIC_MODEL` |
+| Google Gemini | `GEMINI_API_KEY` — optional: `GEMINI_MODEL` (default: `gemini-2.5-pro`), `GEMINI_SECRET_RESOURCE` (GCP Secret Manager) |
+| NavSecOps | `NAVSECOPS_INGEST_SECRET` (shared secret for Bearer auth) |
+| Optional | `STORMGLASS_API_KEY`, `PORT` |
 
-Ne pas committer `naviguide-api/.env`.
+Do not commit `naviguide-api/.env`.
 
 ---
 
-## Comment tester (local, Docker)
+## How to test (local, Docker)
 
-Depuis la **racine du dépôt** (là où se trouve le `Dockerfile`) :
+From the **repository root** (where the `Dockerfile` is located):
 
 ```bash
 docker build -t naviguide-api:local .
 docker run --rm -p 8080:8080 --env-file naviguide-api/.env -e PORT=8080 naviguide-api:local
 ```
 
-Puis :
+Then:
 
-- **Swagger** : http://127.0.0.1:8080/docs  
-- **Autorisation** : bouton *Authorize* — saisir la **valeur** du secret NavSecOps (souvent **sans** le préfixe `Bearer `, selon l’UI).
+- **Swagger**: http://127.0.0.1:8080/docs
+- **Authorization**: click *Authorize* — enter the NavSecOps secret **value** (usually **without** the `Bearer ` prefix, depending on the UI).
 
-**Exemple `curl`** — `POST /api/v1/navsecops/analyze` :
+**`curl` example** — `POST /api/v1/navsecops/analyze`:
 
 ```bash
 curl -sS -X POST 'http://127.0.0.1:8080/api/v1/navsecops/analyze' \
   -H 'accept: application/json' \
-  -H 'Authorization: Bearer VOTRE_NAVSECOPS_INGEST_SECRET' \
+  -H 'Authorization: Bearer YOUR_NAVSECOPS_INGEST_SECRET' \
   -H 'Content-Type: application/json' \
-  -d '{"geojson":{"type":"Feature","properties":{"name":"test"},"geometry":{"type":"LineString","coordinates":[[-1.15,46.15],[-4.5,48.4]]}},"language":"fr"}'
+  -d '{"geojson":{"type":"Feature","properties":{"name":"test"},"geometry":{"type":"LineString","coordinates":[[-1.15,46.15],[-4.5,48.4]]}},"language":"en"}'
 ```
 
-**Chaîne GitLab / script local** (API déjà démarrée ailleurs) : [scripts/gitlab_navsecops_chain.sh](scripts/gitlab_navsecops_chain.sh).
+**GitLab chain / local script** (API already running elsewhere): [scripts/gitlab_navsecops_chain.sh](scripts/gitlab_navsecops_chain.sh).
 
 ---
 
-## Déploiement Google Cloud Run (checklist de redéploiement)
+## Google Cloud Run deployment (redeployment checklist)
 
-Chaque changement de **code ou dépendances** dans l’image impose : **rebuild → push → nouvelle révision Cloud Run**.
+Every change to **code or dependencies** in the image requires: **rebuild → push → new Cloud Run revision**.
 
-### Prérequis GCP
+### GCP prerequisites
 
-- Projet (ex.) : `naviguide-for-berry-mappemonde`
-- **Artifact Registry** : dépôt Docker (ex. `naviguide-api` en `europe-west9`)
-- **Secret Manager** : secrets montés en variables d’environnement sur le service, par ex.  
+- Project (e.g.): `naviguide-for-berry-mappemonde`
+- **Artifact Registry**: Docker repository (e.g. `naviguide-api` in `europe-west9`)
+- **Secret Manager**: secrets mounted as environment variables on the service, e.g.
   `gemini-api-key`, `anthropic-api-key`, `navsecops-ingest-secret`, `copernicus-username`, `copernicus-password`
-- Compte d’exécution Cloud Run : rôle **Secret Manager Secret Accessor** sur ces secrets
-- Invocation **publique** (juges / Swagger sans compte Google) : `allUsers` → `roles/run.invoker` sur le service. Si l’organisation applique **Domain restricted sharing** (`iam.allowedPolicyMemberDomains`), prévoir une **exception au niveau du projet** pour autoriser `allUsers` sur ce service uniquement.
+- Cloud Run service account: **Secret Manager Secret Accessor** role on these secrets
+- **Public** invocation (judges / Swagger without a Google account): `allUsers` → `roles/run.invoker` on the service. If the organization enforces **Domain restricted sharing** (`iam.allowedPolicyMemberDomains`), set up a **project-level exception** to allow `allUsers` on this service only.
 
-### 1. Authentification Docker vers Artifact Registry
+### 1. Authenticate Docker to Artifact Registry
 
 ```bash
 gcloud auth configure-docker europe-west9-docker.pkg.dev
 ```
 
-### 2. Build image **linux/amd64** (obligatoire depuis un Mac ARM)
+### 2. Build **linux/amd64** image (required from a Mac ARM)
 
 ```bash
 docker buildx build --platform linux/amd64 -t naviguide-api:local --load .
 ```
 
-Vérification :
+Verification:
 
 ```bash
 docker image inspect naviguide-api:local --format '{{.Architecture}}'
 ```
 
-Attendu : `amd64`.
+Expected: `amd64`.
 
 ### 3. Tag + push
 
-Remplacer `vN` par un nouveau tag à chaque release (ex. `v5`, `v6`).
+Replace `vN` with a new tag for each release (e.g. `v5`, `v6`).
 
 ```bash
 docker tag naviguide-api:local \
@@ -112,7 +112,7 @@ docker tag naviguide-api:local \
 docker push europe-west9-docker.pkg.dev/naviguide-for-berry-mappemonde/naviguide-api/naviguide-api:vN
 ```
 
-### 4. Déployer / mettre à jour le service
+### 4. Deploy / update the service
 
 ```bash
 gcloud run deploy naviguide-api \
@@ -128,9 +128,9 @@ gcloud run deploy naviguide-api \
   --set-env-vars=GEMINI_MODEL=gemini-2.5-pro
 ```
 
-Si `--allow-unauthenticated` échoue (policy org), ajouter manuellement le binding `allUsers` / `roles/run.invoker` une fois la policy projet corrigée.
+If `--allow-unauthenticated` fails (org policy), manually add the `allUsers` / `roles/run.invoker` binding after fixing the project policy.
 
-### 5. URL du service
+### 5. Service URL
 
 ```bash
 gcloud run services describe naviguide-api \
@@ -139,58 +139,58 @@ gcloud run services describe naviguide-api \
   --format='value(status.url)'
 ```
 
-Smoke test : `GET …/docs` puis le même `curl` qu’en local en remplaçant l’hôte par l’URL Cloud Run.
+Smoke test: `GET .../docs` then the same `curl` as locally, replacing the host with the Cloud Run URL.
 
 ---
 
-## Endpoints API (aperçu)
+## API endpoints (overview)
 
-| Chemin | Description |
-|--------|-------------|
-| `POST /api/v1/navsecops/analyze` | Chaîne validate (Gemini) → risk (Gemini) → briefing (Claude) — Bearer `NAVSECOPS_INGEST_SECRET` |
-| `POST /duo/validate` | Validation GeoJSON (Gemini) |
-| `POST /duo/risk` | Analyse de risque (Gemini) |
-| `POST /duo/briefing` | Synthèse skipper (Claude) |
+| Path | Description |
+|------|-------------|
+| `POST /api/v1/navsecops/analyze` | Chain: validate (Gemini) → risk (Gemini) → briefing (Claude) — Bearer `NAVSECOPS_INGEST_SECRET` |
+| `POST /duo/validate` | GeoJSON validation (Gemini) |
+| `POST /duo/risk` | Risk assessment (Gemini) |
+| `POST /duo/briefing` | Skipper synthesis (Claude) |
 
-Détails NavSecOps : [docs/NAVSECOPS_PR_MATRIX.md](docs/NAVSECOPS_PR_MATRIX.md), [docs/NAVSECOPS_TECHNICAL_ROADMAP.md](docs/NAVSECOPS_TECHNICAL_ROADMAP.md).
+NavSecOps details: [docs/NAVSECOPS_PR_MATRIX.md](docs/NAVSECOPS_PR_MATRIX.md), [docs/NAVSECOPS_TECHNICAL_ROADMAP.md](docs/NAVSECOPS_TECHNICAL_ROADMAP.md).
 
 ---
 
-## Structure du dépôt (extrait)
+## Repository structure (excerpt)
 
 ```
 naviguide/
-├── Dockerfile                 # Image API seule (workspace + naviguide-api)
+├── Dockerfile                 # API-only image (workspace + naviguide-api)
 ├── naviguide-api/             # FastAPI — routing, Copernicus, agents, /duo, NavSecOps
-├── naviguide_workspace/       # llm_utils (Gemini google-genai + Claude), orchestrateur, agents…
-├── naviguide-app/             # Frontend React (Vite)
-├── docs/                      # Manuel, NavSecOps, données…
+├── naviguide_workspace/       # llm_utils (Gemini google-genai + Claude), orchestrator, agents...
+├── naviguide-app/             # React frontend (Vite)
+├── docs/                      # Manual, NavSecOps, data...
 ├── scripts/                   # fetch_data, gitlab_navsecops_chain, etc.
-├── supervisor/                # Stack multi-services locale
-└── proxy_server.py            # Proxy de dev / déploiement classique
+├── supervisor/                # Local multi-service stack
+└── proxy_server.py            # Dev proxy / classic deployment
 ```
 
-Données lourdes (GEBCO, etc.) : [docs/DATA.md](docs/DATA.md), [scripts/fetch_data.sh](scripts/fetch_data.sh) si présent.
+Large data files (GEBCO, etc.): [docs/DATA.md](docs/DATA.md), [scripts/fetch_data.sh](scripts/fetch_data.sh) if present.
 
 ---
 
-## Stack technique (API)
+## Tech stack (API)
 
-- FastAPI, uvicorn  
-- Gemini : SDK **`google-genai`** (Gemini Developer API)  
-- Claude : `anthropic`  
-- Optionnel : `google-cloud-secret-manager` pour `GEMINI_SECRET_RESOURCE`
-
----
-
-## Limites connues
-
-- L’API n’est **pas** un ECDIS ; pas de substitute aux cartes officielles.  
-- Sans clés LLM, les routes concernées échouent ou dégradent (voir code / logs).  
-- Disque Cloud Run : éphémère (fichiers SQLite locaux non persistants entre révisions).
+- FastAPI, uvicorn
+- Gemini: **`google-genai`** SDK (Gemini Developer API)
+- Claude: `anthropic`
+- Optional: `google-cloud-secret-manager` for `GEMINI_SECRET_RESOURCE`
 
 ---
 
-## Licence
+## Known limitations
 
-Projet privé — Berry-Mappemonde / NAVIGUIDE (voir [LICENSE](LICENSE) si présent).
+- The API is **not** an ECDIS; it does not replace official charts.
+- Without LLM keys, affected routes will fail or degrade (see code / logs).
+- Cloud Run disk: ephemeral (local SQLite files do not persist across revisions).
+
+---
+
+## License
+
+Private project — Berry-Mappemonde / NAVIGUIDE (see [LICENSE](LICENSE) if present).
