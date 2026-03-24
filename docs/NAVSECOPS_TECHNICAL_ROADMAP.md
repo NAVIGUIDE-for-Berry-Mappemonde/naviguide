@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-24 (Duo: captain short messages + MR-only Git path + reviewers).
+**Last updated:** 2026-03-24 (Duo prompts v4: Panama / SPM reorder / FR skipper UX / ref `main` explicite + MR-only path).
 
 ---
 
@@ -137,6 +137,7 @@ Documented decisions above. No code deliverable.
 #### Phase 2B — Duo agent / flow ✅ ENRICHED (2026-03-24)
 
 - **`agents/agent.yml` / `flows/flow.yml`:** (1) **Pasted** GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → `## Écart par rapport au tracé canonique (main)` + four rubriques si diff. (2) **Captain short message** (pas de gros JSON) → même canon → consigne en langage naturel → `## Consigne comprise` / extraits canon / `## Proposition (après)` / questions si besoin → rubriques skipper. (3) **Standard** fichier/MR/`list_dir`. **No** catalog HTTP to NAVIGUIDE.
+- **Itération prompts (2026-03, après tests « Dialogues avec Duo ») :** renforcement **circumnavigation** (pas de leg transocéanique incohérent sans validation Panama / ordre des bassins) ; **SPM / Halifax** interprétés par défaut comme **réordonnancement** du bloc découplé dans le GeoJSON (pas abandon d’un océan entier) ; **planification a priori vs en mer** et interdiction d’affirmer « arrivée » sans preuve dans le message ; **langue** alignée sur l’utilisateur (titres FR si message FR) ; **jargon Git/MR invisible** côté skipper, CTA **NAVIGUIDE** ; `get_repository_file` avec **`ref` = `main` explicite** (éviter `HEAD` implicite).
 - **Git path (MR-only, after explicit confirmation):** `create_commit` **only** on `feat/route-*` or `duo/*`; **minimal** diff sur `routes/naviguide-berry-mappemonde.geojson` (reprendre le JSON canon en entier, ne modifier que les `features` concernées — pas de régénération complète) → `create_merge_request` → **`create_merge_request_note` obligatoire** (briefing) → `update_merge_request` reviewers **`iamRabia_N`**, **`clementfilisetti`**. **Interdit:** commit/push sur `main` sans MR.
 - **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate before each catalog publish; **Web vs IDE** availability may differ.
 - Deliverable: Duo complements **CI**; job **`navsecops_mr`** sur MR qui touche `.geojson` inchangé.
@@ -204,6 +205,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-23 | Phase 3: SQLite store, `sync-report`, `GET /reports`, optional `NAVSECOPS_SYNC_ENABLED` CI. Phase 4: `proxy_server.py` routes for `/api/v1/navsecops/*` and `/duo/*`. |
 | 2026-03-24 | Phase 2B: Duo YAML — pasted GeoJSON vs `main`, skipper comparative format, optional `create_commit` / MR / reviewers / note tools; tag `backup/flow-yaml-avant-toolset` + roadmap §9 (Duo catalog). |
 | 2026-03-24 | Phase 2B+: Captain short-message mode, MR-only Git (no `main` direct), mandatory MR briefing note, reviewers `iamRabia_N` + `clementfilisetti`, minimal GeoJSON edits; §9.6. |
+| 2026-03-24 | Phase 2B prompts v4: Panama / SPM reorder rules, skipper FR + no visible Git jargon, `main` explicit for `get_repository_file`, NAVIGUIDE CTA; tag `navsecops-catalog-berry-mappemonde-2026-v4`. |
 
 ---
 
@@ -247,5 +249,7 @@ Documented decisions above. No code deliverable.
 |------|---------|-----|
 | **Paste** | Large GeoJSON in message | Compare to `main`; MR tools only after explicit confirm; MR-only policy applies. |
 | **Captain** | Short operational instruction, no big JSON | Load canon; clarifications; readable proposal; confirm parcours → same MR-only chain. |
+
+**Prompt contract (v4, terrain Duo) :** texte utilisateur en **langue du capitaine** ; pas de tableaux type Dimension/Évaluation en anglais ; **Validation : OK** par défaut ; pas de météo web tierce en premier recours ; **circumnavigation** et **SPM/Halifax** comme ci-dessus (Phase 2B).
 
 **Minimal GeoJSON edit:** start from full canonical `get_repository_file` output; change only affected `features`; never rewrite the whole FeatureCollection from scratch in the model. **CI:** MR with `.geojson` diff still triggers **`navsecops_mr`** (`.gitlab-ci.yml` unchanged).
