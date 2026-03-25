@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-25 (§9.2 checklist tag/`main` + `.cursor/rules` catalogue hackathon).
+**Last updated:** 2026-03-25 (§9.2 historique à jour avant tag ; branches ASCII ; règles Cursor catalogue).
 
 ---
 
@@ -210,6 +210,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-25 | Phase 2B prompts v5: GEOMETRY AND MINIMAL EDIT (anti-grille LineString, no invented `from`/`to`, policy failure → no `create_commit`); tag `navsecops-catalog-berry-mappemonde-2026-v5`. |
 | 2026-03-25 | Roadmap §9.7: dépannage job hackathon `ai-catalog-sync` (erreur fast-forward, mitigations, limites repo). |
 | 2026-03-25 | §9.2: étape bloquante `git rev-parse gitlab/main` = `git rev-parse tag^{commit}` ; tags protégés ; règle Cursor `naviguide-global.mdc` (section Duo catalog). |
+| 2026-03-25 | §9.2: étape **1a** (main poussé + aligné `gitlab/main` avant tag, anti fast-forward catalog-sync) ; branches **ASCII** pour `create_commit` ; règle Cursor enrichie. |
 
 ---
 
@@ -224,11 +225,13 @@ Documented decisions above. No code deliverable.
 ### 9.2 Republication checklist (hackathon)
 
 1. Merge or push YAML changes on the canonical branch.
+1a. **Avant création / push d’un tag catalogue (bloquant — évite fast-forward `catalog-sync`) :** `git fetch gitlab` ; aligner **`main`** sur **`gitlab/main`** (ex. `git pull gitlab main --rebase` si en retard) ; **`git push gitlab main`** jusqu’à ce que **tous** les commits à publier soient sur **`gitlab/main`** **avant** de taguer. Ne pas taguer tant que des commits YAML ne sont que locaux ou que `main` diverge du remote — situation typique derrière **Not possible to fast-forward** côté job hackathon.
 1b. **Alignement tag / `main` (bloquant) :** `git fetch gitlab`, puis vérifier **`git rev-parse gitlab/main`** = **`git rev-parse <tag>^{commit}`** une fois le tag créé **localement** sur le bon commit (en pratique : pointe de **`gitlab/main`**). Si **≠** → **ne pas pousser le tag** ; recréer le tag sur `gitlab/main`. Les tags catalogue sont souvent **protégés** : **`git push --force`** sur le tag est **refusé** sans action dans GitLab (**Settings → Repository → Protected tags**) ou procédure organisateurs — ne pas tenter un force-push « à l’aveugle ».
 2. Create a **new git tag** for catalog sync if the hackathon requires it (e.g. bump `navsecops-catalog-berry-mappemonde-2026-v2` → `navsecops-catalog-berry-mappemonde-2026-v3` after captain-mode prompt changes).
 3. Run **agent/flow validation** in GitLab CI if enabled for the project.
 4. Publish/sync the **agent** and **flow** catalog items in the Duo UI.
 5. Update `.ai-catalog-mapping.json` with new `definition_hash` / `synced_at` / `git_tag` after GitLab returns post-sync metadata.
+6. **Branches Duo `create_commit` :** noms `feat/route-*` / `duo/*` en **ASCII uniquement** (pas d’accents ni d’espaces dans le slug) — voir `flows/flow.yml` / `agents/agent.yml`.
 
 ### 9.3 Manual verification (post-publish)
 

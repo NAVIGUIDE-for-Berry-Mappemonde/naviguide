@@ -209,7 +209,10 @@ definition:
           nouvelle route dans le dépôt pour qu’elle soit prise en compte par
           NAVIGUIDE ? » — then run in order: create_commit (branch feat/route-* or
           duo/* only) → create_merge_request → create_merge_request_note →
-          update_merge_request (iamRabia_N, clementfilisetti). Full canonical JSON
+          update_merge_request (iamRabia_N, clementfilisetti).
+          Branch names MUST be **ASCII only** (a–z, 0–9, hyphen): no accents,
+          no spaces, no Unicode in the slug — e.g. feat/route-caraibes-panama not
+          feat/route-caraïbes-panama. Full canonical JSON
           from get_repository_file; change ONLY affected features; **and** strict
           GEOMETRY AND MINIMAL EDIT (no dense LineString regeneration).
 

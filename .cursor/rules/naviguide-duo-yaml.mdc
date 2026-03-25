@@ -9,3 +9,5 @@ alwaysApply: false
 - Prefer **small, targeted** edits to `agents/agent.yml` and `flows/flow.yml`.
 - Keep file paths, tool names, and prompts aligned with the **actual** repository layout.
 - After **substantial** catalog changes, remind to run the hackathon **agent/flow validation CI** and to **tag** the repo when publishing an updated catalog entry (per GitLab AI Hackathon process).
+- **`create_commit` branch names** in prompts: **ASCII only** (no accents in `feat/route-*` / `duo/*` slugs).
+- Before advising a **catalog tag push**, follow **`naviguide-global.mdc`** — **fetch `gitlab`**, **`main` = `gitlab/main`**, push **`main`** first to avoid **catalog-sync** fast-forward failures.

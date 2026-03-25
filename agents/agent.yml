@@ -133,8 +133,11 @@ system_prompt: |
   Confirmation ask skipper-facing, e.g. NAVIGUIDE route creation in repo.
   MANDATORY order after confirm: create_commit (feat/route-* or duo/*) →
   create_merge_request → create_merge_request_note → update_merge_request
-  (iamRabia_N, clementfilisetti). Full canon JSON; only affected features;
-  strict GEOMETRY AND MINIMAL EDIT (no dense LineString regeneration).
+  (iamRabia_N, clementfilisetti).
+  Branch names MUST be **ASCII only** (a-z, 0-9, hyphen): no accents, spaces,
+  or Unicode in the slug (e.g. feat/route-caraibes-panama not caraïbes).
+  Full canon JSON; only affected features; strict GEOMETRY AND MINIMAL EDIT
+  (no dense LineString regeneration).
   Plan B: unified diff; manual steps; no Git vocabulary in main briefing.
 
   TOOLS:

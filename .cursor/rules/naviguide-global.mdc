@@ -37,16 +37,23 @@ alwaysApply: true
 
 ## Duo hackathon catalog — mandatory before any catalog tag push
 
+**First (blocking) — reduce catalog-sync / “Not possible to fast-forward” failures:**  
+Before **any** catalog tag step, ensure **Git history is current with canonical `gitlab`**: run **`git fetch gitlab`**, align local **`main`** with **`gitlab/main`** (e.g. **`git pull gitlab main --rebase`** if behind; resolve conflicts first). Push **`main`** to **`gitlab`** **before** tagging so **remote `main` already contains** every commit the tag must point to. **Do not** push a catalog tag while local `main` lags **`gitlab/main`** or while the YAML changes exist only as **unpushed local commits** — that mismatch contributes to **fast-forward** errors in hackathon **catalog-sync** jobs.
+
 Before **`git push gitlab`** of a catalog release tag (e.g. `navsecops-catalog-berry-mappemonde-2026-v*`) or advising the user to do so:
 
-1. Run **`git fetch gitlab`** (and ensure local `main` matches **`gitlab/main`** if you are tagging from `main`).
-2. Create the tag **on the intended commit** (normally **tip of `gitlab/main`** after the Duo YAML / roadmap commits are pushed).
+1. Confirm **`git fetch gitlab`** is done and **`git rev-parse main`** = **`git rev-parse gitlab/main`** (unless tagging a different ref the user explicitly chose).
+2. Create the tag **on the intended commit** (normally **tip of `gitlab/main`** after Duo YAML / roadmap commits are on **`gitlab/main`**).
 3. **Verify alignment (blocking):**  
    `git rev-parse gitlab/main` **must equal** `git rev-parse <tag>^{commit}`  
-   If **not equal** → **STOP** — do not push the tag; fix by recreating the tag on `gitlab/main` **before** the first push.
+   If **not equal** → **STOP** — do not push the tag; recreate the tag on `gitlab/main` **before** the first push.
 4. **Protected tags:** GitLab may reject **`git push --force`** on catalog tags (`Protected tags cannot be updated`). Do **not** suggest or run a blind force-push on a protected tag; use **human** steps: GitLab **Settings → Repository → Protected tags**, or hackathon / organizer procedure, then realign if allowed.
 5. **Pipelines differ:** a green pipeline on **`main`** does **not** guarantee a green pipeline on a **tag** (`catalog-sync` and related jobs run on tag events). Never equate the two without checking both in the GitLab UI.
 6. After a successful sync, update **`.ai-catalog-mapping.json`** when GitLab returns new metadata (see `docs/NAVSECOPS_TECHNICAL_ROADMAP.md` §9.2).
+
+## Duo agent / flow — create_commit branch names
+
+- Branch names (`feat/route-*`, `duo/*`) must be **ASCII only** (letters, digits, hyphens): **no accents**, no spaces (e.g. `caraibes` not `caraïbes`).
 
 ## NavSecOps changes
 
