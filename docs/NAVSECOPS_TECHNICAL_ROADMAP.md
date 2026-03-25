@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-26 (Phase 2B prompts v8 : splice nominal vs Plan B ; circumnavigation ciblée ; tag catalogue `navsecops-catalog-berry-mappemonde-2026-v8`).
+**Last updated:** 2026-03-24 (Phase 2B prompts v9 : **English-only** texte skipper Duo ; v8 inchangé sur géométrie / circumnavigation ; tag catalogue `navsecops-catalog-berry-mappemonde-2026-v9` après merge + §9).
 
 ---
 
@@ -136,8 +136,8 @@ Documented decisions above. No code deliverable.
 
 #### Phase 2B — Duo agent / flow ✅ ENRICHED (2026-03-24)
 
-- **`agents/agent.yml` / `flows/flow.yml`:** (1) **Pasted** GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → `## Écart par rapport au tracé canonique (main)` + four rubriques si diff. (2) **Captain short message** (pas de gros JSON) → même canon → consigne en langage naturel → `## Consigne comprise` / extraits canon / `## Proposition (après)` / questions si besoin → rubriques skipper. (3) **Standard** fichier/MR/`list_dir`. **No** catalog HTTP to NAVIGUIDE.
-- **Itération prompts (2026-03, après tests « Dialogues avec Duo ») :** renforcement **circumnavigation** (pas de leg transocéanique incohérent sans validation Panama / ordre des bassins) ; **SPM / Halifax** interprétés par défaut comme **réordonnancement** du bloc découplé dans le GeoJSON (pas abandon d’un océan entier) ; **planification a priori vs en mer** et interdiction d’affirmer « arrivée » sans preuve dans le message ; **langue** alignée sur l’utilisateur (titres FR si message FR) ; **jargon Git/MR invisible** côté skipper, CTA **NAVIGUIDE** ; `get_repository_file` avec **`ref` = `main` explicite** (éviter `HEAD` implicite).
+- **`agents/agent.yml` / `flows/flow.yml`:** (1) **Pasted** GeoJSON → `get_repository_file` (`main`, `routes/naviguide-berry-mappemonde.geojson`) → semantic compare → `## Delta vs canonical route (main)` + four standard sections if diff. (2) **Captain short message** (no large JSON) → same canon → natural-language instruction → prose-first + optional **Clarification questions** → skipper rubrics. (3) **Standard** file / MR / `list_dir`. **No** catalog HTTP to NAVIGUIDE.
+- **Itération prompts (2026-03, après tests « Dialogues avec Duo ») :** renforcement **circumnavigation** (pas de leg transocéanique incohérent sans validation Panama / ordre des bassins) ; **SPM / Halifax** interprétés par défaut comme **réordonnancement** du bloc découplé dans le GeoJSON (pas abandon d’un océan entier) ; **planification a priori vs en mer** et interdiction d’affirmer « arrivée » sans preuve dans le message ; **English-only** pour **tout** le texte visible Duo (titres, corps, questions, confirmations), **sans** suivre la langue du message utilisateur — les **noms** d’escales cités depuis le GeoJSON peuvent rester tels quels ; **jargon Git/MR invisible** côté skipper, CTA **NAVIGUIDE** ; `get_repository_file` avec **`ref` = `main` explicite** (éviter `HEAD` implicite).
 - **Prompts v5 (2026-03-25) :** bloc **GEOMETRY AND MINIMAL EDIT** dans `flows/flow.yml` et `agents/agent.yml` — interdiction de **densifier** les `LineString` (grilles / grands cercles interpolés dans le chat) ; `from`/`to` **canon uniquement** ; saut d’escale par **splice** minimal entre legs adjacents ; si multiplication des sommets (>2× ou plus qu’une poignée de vertices) ou leg dense LLM → **pas de `create_commit`**, consignes manuelles ; même logique si **PASTED** mène à un commit.
 - **Git path (MR-only, after explicit confirmation):** `create_commit` **only** on `feat/route-*` or `duo/*`; **minimal** diff sur `routes/naviguide-berry-mappemonde.geojson` (reprendre le JSON canon en entier, ne modifier que les `features` concernées — pas de régénération complète) → `create_merge_request` → **`create_merge_request_note` obligatoire** (briefing) → `update_merge_request` reviewers **`iamRabia_N`**, **`clementfilisetti`**. **Interdit:** commit/push sur `main` sans MR.
 - **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate before each catalog publish; **Web vs IDE** availability may differ.
@@ -149,6 +149,7 @@ Documented decisions above. No code deliverable.
   - **CI:** job **`berry_route_order_validate`** in root `.gitlab-ci.yml` (`merge_request_event`, image `python:3.12-alpine`, no secrets); **fails** if JSON and GeoJSON diverge.
   - **Duo:** `agents/agent.yml` and `flows/flow.yml` require **`get_repository_file` ref `main`** on digest **then** JSON **then** canon GeoJSON for **PASTED** and **CAPTAIN** workflows; itinerary answers must not contradict digest + JSON.
 - **Prompts v8 (2026-03-26):** **Skip-stop splice** (fusion de deux `LineString` canon adjacents, retrait Point escale) = **chemin nominal** — **interdit** de classer ça en Plan B ni de refuser POLICY FAILURE **seulement** parce que le leg fusionné est long. POLICY FAILURE = sommets **nouveaux** / grille LLM / leg absent du canon, **pas** la réutilisation des coordonnées des deux legs épissés. Après **confirmation explicite** NAVIGUIDE, si conforme → **obligatoire** `create_commit` → `create_merge_request` → note → reviewers. **Plan B** réservé aux vrais échecs de politique. **Circumnavigation / Panama** : questions ciblées **uniquement** pour raccourcis de bassins ou liens **nouveaux** non réalisables par splice — **pas** pour saut d’escale standard sur le graphe (ex. Cayenne). Tag catalogue : `navsecops-catalog-berry-mappemonde-2026-v8`.
+- **Prompts v9 (2026-03-24):** Sortie **100 % anglais** côté skipper pour l’agent et le flow Duo (`agents/agent.yml`, `flows/flow.yml`) : titres de sections, rédaction, questions de clarification, demandes de confirmation **NAVIGUIDE** — même si l’utilisateur écrit en français ou autre langue. Après merge : republier le catalogue hackathon et taguer **`navsecops-catalog-berry-mappemonde-2026-v9`** (§9).
 
 ---
 
@@ -214,6 +215,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-24 | Phase 2B: Duo YAML — pasted GeoJSON vs `main`, skipper comparative format, optional `create_commit` / MR / reviewers / note tools; tag `backup/flow-yaml-avant-toolset` + roadmap §9 (Duo catalog). |
 | 2026-03-24 | Phase 2B+: Captain short-message mode, MR-only Git (no `main` direct), mandatory MR briefing note, reviewers `iamRabia_N` + `clementfilisetti`, minimal GeoJSON edits; §9.6. |
 | 2026-03-24 | Phase 2B prompts v4: Panama / SPM reorder rules, skipper FR + no visible Git jargon, `main` explicit for `get_repository_file`, NAVIGUIDE CTA; tag `navsecops-catalog-berry-mappemonde-2026-v4`. |
+| 2026-03-24 | Phase 2B prompts v9: Duo **English-only** skipper-facing text in `agents/agent.yml` + `flows/flow.yml` (ignore user message language for visible reply); republish catalog per §9; tag `navsecops-catalog-berry-mappemonde-2026-v9`. |
 | 2026-03-25 | Phase 2B prompts v5: GEOMETRY AND MINIMAL EDIT (anti-grille LineString, no invented `from`/`to`, policy failure → no `create_commit`); tag `navsecops-catalog-berry-mappemonde-2026-v5`. |
 | 2026-03-25 | Roadmap §9.7: dépannage job hackathon `ai-catalog-sync` (erreur fast-forward, mitigations, limites repo). |
 | 2026-03-25 | §9.2: étape bloquante `git rev-parse gitlab/main` = `git rev-parse tag^{commit}` ; tags protégés ; règle Cursor `naviguide-global.mdc` (section Duo catalog). |
@@ -267,7 +269,7 @@ Documented decisions above. No code deliverable.
 | **Paste** | Large GeoJSON in message | Compare to `main`; MR tools only after explicit confirm; MR-only policy applies. |
 | **Captain** | Short operational instruction, no big JSON | Load canon; clarifications; readable proposal; confirm parcours → same MR-only chain. |
 
-**Prompt contract (v4, terrain Duo) :** texte utilisateur en **langue du capitaine** ; pas de tableaux type Dimension/Évaluation en anglais ; **Validation : OK** par défaut ; pas de météo web tierce en premier recours ; **circumnavigation** et **SPM/Halifax** comme ci-dessus (Phase 2B).
+**Prompt contract (v4 → v9, terrain Duo) :** texte **skipper-facing** en **anglais uniquement** (v9) ; pas de tableaux type Dimension/Assessment ; **Validation: OK** par défaut ; pas de météo web tierce en premier recours ; **circumnavigation** et **SPM/Halifax** comme Phase 2B.
 
 **v5 — géométrie :** pas de **densification** de polylignes par le modèle ; `from`/`to` alignés sur le canon ; **GEOMETRY AND MINIMAL EDIT** avant tout `create_commit` (sinon instructions manuelles).
 
