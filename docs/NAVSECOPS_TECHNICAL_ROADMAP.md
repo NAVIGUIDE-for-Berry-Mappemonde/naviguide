@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-25 (Duo prompts v5: GEOMETRY AND MINIMAL EDIT — anti-grille LineString, seuil avant `create_commit`).
+**Last updated:** 2026-03-25 (Duo prompts v5 + roadmap §9.7 dépannage job `ai-catalog-sync` / fast-forward).
 
 ---
 
@@ -208,6 +208,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-24 | Phase 2B+: Captain short-message mode, MR-only Git (no `main` direct), mandatory MR briefing note, reviewers `iamRabia_N` + `clementfilisetti`, minimal GeoJSON edits; §9.6. |
 | 2026-03-24 | Phase 2B prompts v4: Panama / SPM reorder rules, skipper FR + no visible Git jargon, `main` explicit for `get_repository_file`, NAVIGUIDE CTA; tag `navsecops-catalog-berry-mappemonde-2026-v4`. |
 | 2026-03-25 | Phase 2B prompts v5: GEOMETRY AND MINIMAL EDIT (anti-grille LineString, no invented `from`/`to`, policy failure → no `create_commit`); tag `navsecops-catalog-berry-mappemonde-2026-v5`. |
+| 2026-03-25 | Roadmap §9.7: dépannage job hackathon `ai-catalog-sync` (erreur fast-forward, mitigations, limites repo). |
 
 ---
 
@@ -257,3 +258,9 @@ Documented decisions above. No code deliverable.
 **v5 — géométrie :** pas de **densification** de polylignes par le modèle ; `from`/`to` alignés sur le canon ; **GEOMETRY AND MINIMAL EDIT** avant tout `create_commit` (sinon instructions manuelles).
 
 **Minimal GeoJSON edit:** start from full canonical `get_repository_file` output; change only affected `features`; never rewrite the whole FeatureCollection from scratch in the model. **CI:** MR with `.geojson` diff still triggers **`navsecops_mr`** (`.gitlab-ci.yml` unchanged).
+
+### 9.7 Hackathon job `ai-catalog-sync` — erreur « Not possible to fast-forward »
+
+- **Contexte :** un job de **groupe / template** hackathon exécute `ACTION=sync` (`ai-catalog-sync`) pour publier `agents/agent.yml` et `flows/flow.yml` vers le catalogue Duo. Ce job **n’est pas** défini dans le `.gitlab-ci.yml` racine du dépôt (qui ne contient que `navsecops_mr` sur MR).
+- **Erreur :** `Not possible to fast-forward, aborting` signifie en général que le script fait un `git pull`/mise à jour **sans merge** sur un clone dont l’historique a **divergé** (push concurrent, commit bot `chore: update AI Catalog mapping` en course, ou cache runner désynchronisé).
+- **Mitigations côté équipe :** (1) **Retry** du job ou de la pipeline dans GitLab **Build → Jobs** ; (2) un **nouveau push** sur `main` (même commit doc) pour relancer une pipeline avec un clone propre ; (3) avant de pousser, **`git fetch gitlab && git pull gitlab main`** en local pour limiter les merges « Merge branch 'main' of … » qui compliquent l’historique ; (4) si ça échoue encore, **support / canal hackathon** — la correction durable est côté script GitLab (`merge` ou rebase explicite), pas dans le YAML applicatif NavSecOps.
