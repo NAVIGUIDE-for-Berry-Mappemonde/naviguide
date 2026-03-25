@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-25 (§9.2 historique à jour avant tag ; branches ASCII ; règles Cursor catalogue).
+**Last updated:** 2026-03-25 (Phase 2B route digest + `berry_route_order_validate` CI ; §9.2 catalogue inchangé).
 
 ---
 
@@ -142,6 +142,12 @@ Documented decisions above. No code deliverable.
 - **Git path (MR-only, after explicit confirmation):** `create_commit` **only** on `feat/route-*` or `duo/*`; **minimal** diff sur `routes/naviguide-berry-mappemonde.geojson` (reprendre le JSON canon en entier, ne modifier que les `features` concernées — pas de régénération complète) → `create_merge_request` → **`create_merge_request_note` obligatoire** (briefing) → `update_merge_request` reviewers **`iamRabia_N`**, **`clementfilisetti`**. **Interdit:** commit/push sur `main` sans MR.
 - **Tool names** are `snake_case` per [GitLab Agent tools](https://docs.gitlab.com/development/duo_agent_platform/agents/tools/) — re-validate before each catalog publish; **Web vs IDE** availability may differ.
 - Deliverable: Duo complements **CI**; job **`navsecops_mr`** sur MR qui touche `.geojson` inchangé.
+- **Route digest (grounding, 2026-03-25):**
+  - **`docs/BERRY_MAPPEMONDE_ROUTE_DIGEST.md`** — human-readable circumnavigation order, SPM decoupled block, full leg table.
+  - **`routes/berry-mappemonde-route-order.json`** — machine-readable `escales_ordered`, `legs_ordered`, `decoupled_legs` (derived from canon GeoJSON).
+  - **`scripts/validate_berry_route_order.py`** — default mode compares JSON to `routes/naviguide-berry-mappemonde.geojson`; **`--write`** regenerates the JSON after GeoJSON edits (commit both in the same MR).
+  - **CI:** job **`berry_route_order_validate`** in root `.gitlab-ci.yml` (`merge_request_event`, image `python:3.12-alpine`, no secrets); **fails** if JSON and GeoJSON diverge.
+  - **Duo:** `agents/agent.yml` and `flows/flow.yml` require **`get_repository_file` ref `main`** on digest **then** JSON **then** canon GeoJSON for **PASTED** and **CAPTAIN** workflows; itinerary answers must not contradict digest + JSON.
 
 ---
 
@@ -211,6 +217,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-25 | Roadmap §9.7: dépannage job hackathon `ai-catalog-sync` (erreur fast-forward, mitigations, limites repo). |
 | 2026-03-25 | §9.2: étape bloquante `git rev-parse gitlab/main` = `git rev-parse tag^{commit}` ; tags protégés ; règle Cursor `naviguide-global.mdc` (section Duo catalog). |
 | 2026-03-25 | §9.2: étape **1a** (main poussé + aligné `gitlab/main` avant tag, anti fast-forward catalog-sync) ; branches **ASCII** pour `create_commit` ; règle Cursor enrichie. |
+| 2026-03-25 | Phase 2B: `berry-mappemonde-route-order.json` + `validate_berry_route_order.py` + MR job `berry_route_order_validate`; digest-first grounding in Duo YAML (`BERRY_MAPPEMONDE_ROUTE_DIGEST.md` + JSON before GeoJSON). Republication catalogue hackathon après merge YAML : suivre §9. |
 
 ---
 
