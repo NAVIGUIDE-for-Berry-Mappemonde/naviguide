@@ -35,6 +35,19 @@ alwaysApply: true
 - Treat remote **`gitlab`** (`gitlab.com:gitlab-ai-hackathon/participants/35535537`) as the **canonical** hackathon repository.
 - Before sensitive merges or pushes, align with **`gitlab/main`** (`git fetch gitlab` and compare).
 
+## Duo hackathon catalog — mandatory before any catalog tag push
+
+Before **`git push gitlab`** of a catalog release tag (e.g. `navsecops-catalog-berry-mappemonde-2026-v*`) or advising the user to do so:
+
+1. Run **`git fetch gitlab`** (and ensure local `main` matches **`gitlab/main`** if you are tagging from `main`).
+2. Create the tag **on the intended commit** (normally **tip of `gitlab/main`** after the Duo YAML / roadmap commits are pushed).
+3. **Verify alignment (blocking):**  
+   `git rev-parse gitlab/main` **must equal** `git rev-parse <tag>^{commit}`  
+   If **not equal** → **STOP** — do not push the tag; fix by recreating the tag on `gitlab/main` **before** the first push.
+4. **Protected tags:** GitLab may reject **`git push --force`** on catalog tags (`Protected tags cannot be updated`). Do **not** suggest or run a blind force-push on a protected tag; use **human** steps: GitLab **Settings → Repository → Protected tags**, or hackathon / organizer procedure, then realign if allowed.
+5. **Pipelines differ:** a green pipeline on **`main`** does **not** guarantee a green pipeline on a **tag** (`catalog-sync` and related jobs run on tag events). Never equate the two without checking both in the GitLab UI.
+6. After a successful sync, update **`.ai-catalog-mapping.json`** when GitLab returns new metadata (see `docs/NAVSECOPS_TECHNICAL_ROADMAP.md` §9.2).
+
 ## NavSecOps changes
 
 - Keep NavSecOps work **incremental** (e.g. phases 3–4); avoid broad unrelated refactors.
