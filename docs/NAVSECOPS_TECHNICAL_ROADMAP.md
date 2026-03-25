@@ -1,7 +1,7 @@
 # NAVIGUIDE — NavSecOps (Route-as-Code) Technical Roadmap
 
 **Audience:** engineers working on NAVIGUIDE API, GitLab integration, and hackathon submission.  
-**Last updated:** 2026-03-25 (Phase 2B route digest + `berry_route_order_validate` CI ; §9.2 catalogue inchangé).
+**Last updated:** 2026-03-26 (Phase 2B prompts v8 : splice nominal vs Plan B ; circumnavigation ciblée ; tag catalogue `navsecops-catalog-berry-mappemonde-2026-v8`).
 
 ---
 
@@ -148,6 +148,7 @@ Documented decisions above. No code deliverable.
   - **`scripts/validate_berry_route_order.py`** — default mode compares JSON to `routes/naviguide-berry-mappemonde.geojson`; **`--write`** regenerates the JSON after GeoJSON edits (commit both in the same MR).
   - **CI:** job **`berry_route_order_validate`** in root `.gitlab-ci.yml` (`merge_request_event`, image `python:3.12-alpine`, no secrets); **fails** if JSON and GeoJSON diverge.
   - **Duo:** `agents/agent.yml` and `flows/flow.yml` require **`get_repository_file` ref `main`** on digest **then** JSON **then** canon GeoJSON for **PASTED** and **CAPTAIN** workflows; itinerary answers must not contradict digest + JSON.
+- **Prompts v8 (2026-03-26):** **Skip-stop splice** (fusion de deux `LineString` canon adjacents, retrait Point escale) = **chemin nominal** — **interdit** de classer ça en Plan B ni de refuser POLICY FAILURE **seulement** parce que le leg fusionné est long. POLICY FAILURE = sommets **nouveaux** / grille LLM / leg absent du canon, **pas** la réutilisation des coordonnées des deux legs épissés. Après **confirmation explicite** NAVIGUIDE, si conforme → **obligatoire** `create_commit` → `create_merge_request` → note → reviewers. **Plan B** réservé aux vrais échecs de politique. **Circumnavigation / Panama** : questions ciblées **uniquement** pour raccourcis de bassins ou liens **nouveaux** non réalisables par splice — **pas** pour saut d’escale standard sur le graphe (ex. Cayenne). Tag catalogue : `navsecops-catalog-berry-mappemonde-2026-v8`.
 
 ---
 
@@ -218,6 +219,7 @@ Documented decisions above. No code deliverable.
 | 2026-03-25 | §9.2: étape bloquante `git rev-parse gitlab/main` = `git rev-parse tag^{commit}` ; tags protégés ; règle Cursor `naviguide-global.mdc` (section Duo catalog). |
 | 2026-03-25 | §9.2: étape **1a** (main poussé + aligné `gitlab/main` avant tag, anti fast-forward catalog-sync) ; branches **ASCII** pour `create_commit` ; règle Cursor enrichie. |
 | 2026-03-25 | Phase 2B: `berry-mappemonde-route-order.json` + `validate_berry_route_order.py` + MR job `berry_route_order_validate`; digest-first grounding in Duo YAML (`BERRY_MAPPEMONDE_ROUTE_DIGEST.md` + JSON before GeoJSON). Republication catalogue hackathon après merge YAML : suivre §9. |
+| 2026-03-26 | Phase 2B prompts v8: splice skip-stop = nominal (not Plan B); narrow circumnavigation; mandatory commit→MR chain after NAVIGUIDE confirm when compliant; tag `navsecops-catalog-berry-mappemonde-2026-v8`. |
 
 ---
 
