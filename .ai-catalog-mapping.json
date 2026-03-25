@@ -14,10 +14,10 @@
         }
       },
       "latest_sync": {
-        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v4",
-        "catalog_version": "1.4.0",
-        "synced_at": "2026-03-24T18:42:23.943Z",
-        "definition_hash": "ae9e5895800bb136"
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v6",
+        "catalog_version": "1.6.0",
+        "synced_at": "2026-03-25T08:26:48.260Z",
+        "definition_hash": "e3ec08dac1264b94"
       }
     }
   },
@@ -35,10 +35,10 @@
         }
       },
       "latest_sync": {
-        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v4",
-        "catalog_version": "1.4.0",
-        "synced_at": "2026-03-24T18:42:24.990Z",
-        "definition_hash": "c8129745513b528d"
+        "git_tag": "navsecops-catalog-berry-mappemonde-2026-v6",
+        "catalog_version": "1.6.0",
+        "synced_at": "2026-03-25T08:26:49.057Z",
+        "definition_hash": "3614d429b97b63a7"
       }
     }
   }
