@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "source_geojson": "routes/naviguide-berry-mappemonde.geojson",
+  "escales_ordered": [
+    "Saint-Maur (Berry, Indre)",
+    "La Rochelle",
+    "Ajaccio (Corse)",
+    "Fort-de-France (Martinique)",
+    "Pointe-à-Pitre (Guadeloupe)",
+    "Gustavia (Saint-Barthélemy)",
+    "Marigot (Saint-Martin)",
+    "Cayenne (Guyane)",
+    "Saint-Pierre (Saint-Pierre-et-Miquelon)",
+    "Papeete (Polynésie française)",
+    "Mata-Utu (Wallis-et-Futuna)",
+    "Nouméa (Nouvelle-Calédonie)",
+    "Dzaoudzi (Mayotte)",
+    "Tromelin (TAAF)",
+    "Saint-Gilles (La Réunion)",
+    "Europa (TAAF)",
+    "La Rochelle"
+  ],
+  "legs_ordered": [
+    {
+      "from": "Saint-Maur (Berry, Indre)",
+      "to": "La Rochelle",
+      "type": "overland"
+    },
+    {
+      "from": "La Rochelle",
+      "to": "Point intermédiaire Avant Corse",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Avant Corse",
+      "to": "Ajaccio (Corse)",
+      "type": "maritime"
+    },
+    {
+      "from": "Ajaccio (Corse)",
+      "to": "Point intermédiaire Après Corse",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Après Corse",
+      "to": "Point intermédiaire Après Corse",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Après Corse",
+      "to": "Iles Canari",
+      "type": "maritime"
+    },
+    {
+      "from": "Iles Canari",
+      "to": "Point intermédiaire Cap Verde",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Cap Verde",
+      "to": "Sainte Lucie",
+      "type": "maritime"
+    },
+    {
+      "from": "Sainte Lucie",
+      "to": "Fort-de-France (Martinique)",
+      "type": "maritime"
+    },
+    {
+      "from": "Fort-de-France (Martinique)",
+      "to": "Pointe-à-Pitre (Guadeloupe)",
+      "type": "maritime"
+    },
+    {
+      "from": "Pointe-à-Pitre (Guadeloupe)",
+      "to": "Gustavia (Saint-Barthélemy)",
+      "type": "maritime"
+    },
+    {
+      "from": "Gustavia (Saint-Barthélemy)",
+      "to": "Marigot (Saint-Martin)",
+      "type": "maritime"
+    },
+    {
+      "from": "Marigot (Saint-Martin)",
+      "to": "Cayenne (Guyane)",
+      "type": "maritime"
+    },
+    {
+      "from": "Halifax (Nouvelle-Écosse)",
+      "to": "Saint-Pierre (Saint-Pierre-et-Miquelon)",
+      "type": "maritime"
+    },
+    {
+      "from": "Saint-Pierre (Saint-Pierre-et-Miquelon)",
+      "to": "Halifax (Nouvelle-Écosse)",
+      "type": "maritime"
+    },
+    {
+      "from": "Cayenne (Guyane)",
+      "to": "Papeete (Polynésie française)",
+      "type": "maritime"
+    },
+    {
+      "from": "Papeete (Polynésie française)",
+      "to": "Mata-Utu (Wallis-et-Futuna)",
+      "type": "maritime"
+    },
+    {
+      "from": "Mata-Utu (Wallis-et-Futuna)",
+      "to": "Nouméa (Nouvelle-Calédonie)",
+      "type": "maritime"
+    },
+    {
+      "from": "Nouméa (Nouvelle-Calédonie)",
+      "to": "Point intermédiaire détroit de Torres",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire détroit de Torres",
+      "to": "Point intermédiaire haut Australie",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire haut Australie",
+      "to": "Point intermédiaire haut Australie",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire haut Australie",
+      "to": "Point intermédiaire haut Australie",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire haut Australie",
+      "to": "Sri Lanka",
+      "type": "maritime"
+    },
+    {
+      "from": "Sri Lanka",
+      "to": "Maldives",
+      "type": "maritime"
+    },
+    {
+      "from": "Maldives",
+      "to": "Seichelles",
+      "type": "maritime"
+    },
+    {
+      "from": "Seichelles",
+      "to": "Dzaoudzi (Mayotte)",
+      "type": "maritime"
+    },
+    {
+      "from": "Dzaoudzi (Mayotte)",
+      "to": "Tromelin (TAAF)",
+      "type": "maritime"
+    },
+    {
+      "from": "Tromelin (TAAF)",
+      "to": "Saint-Gilles (La Réunion)",
+      "type": "maritime"
+    },
+    {
+      "from": "Saint-Gilles (La Réunion)",
+      "to": "Europa (TAAF)",
+      "type": "maritime"
+    },
+    {
+      "from": "Europa (TAAF)",
+      "to": "Point intermédiaire Cap de la Bonne Espérance",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Cap de la Bonne Espérance",
+      "to": "Point intermédiaire Sainte Hélène",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Sainte Hélène",
+      "to": "Point intermédiaire Ascension",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Ascension",
+      "to": "Point intermédiaire Ascension - Cap Verde",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Ascension - Cap Verde",
+      "to": "Point intermédiaire Cap Verde",
+      "type": "maritime"
+    },
+    {
+      "from": "Point intermédiaire Cap Verde",
+      "to": "La Rochelle",
+      "type": "maritime"
+    }
+  ],
+  "decoupled_legs": [
+    {
+      "from": "Halifax (Nouvelle-Écosse)",
+      "to": "Saint-Pierre (Saint-Pierre-et-Miquelon)",
+      "type": "maritime"
+    },
+    {
+      "from": "Saint-Pierre (Saint-Pierre-et-Miquelon)",
+      "to": "Halifax (Nouvelle-Écosse)",
+      "type": "maritime"
+    }
+  ]
+}

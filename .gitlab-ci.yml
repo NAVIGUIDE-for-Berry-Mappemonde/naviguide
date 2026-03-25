@@ -24,3 +24,12 @@ navsecops_mr:
     when: always
     expire_in: 7 days
   allow_failure: false
+
+berry_route_order_validate:
+  stage: test
+  image: python:3.12-alpine
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - python3 scripts/validate_berry_route_order.py
+  allow_failure: false
