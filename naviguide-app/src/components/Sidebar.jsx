@@ -201,7 +201,12 @@ const BERRY_LOGO     = "/logo-berry-mappemonde.png";
 
 /* ── File parsers ─────────────────────────────────────────────────────────── */
 
-/** Parse a GeoJSON string → FeatureCollection preserving one Feature per LineString */
+/** Valid [lon, lat] for GeoJSON output */
+function isValidLonLatPair(lon, lat) {
+  return typeof lon === "number" && typeof lat === "number" && Number.isFinite(lon) && Number.isFinite(lat);
+}
+
+/** Parse a GeoJSON string → FeatureCollection (LineStrings, Points; Multi* expanded) */
 function parseGeoJSON(text) {
   const data     = JSON.parse(text);
   const features = [];
@@ -224,6 +229,30 @@ function parseGeoJSON(text) {
             geometry: { type: "LineString", coordinates: line.map(([lon, lat]) => [lon, lat]) },
           })
         );
+        break;
+      case "Point": {
+        const c = geometry.coordinates;
+        if (!c || c.length < 2) break;
+        const [lon, lat] = c;
+        if (!isValidLonLatPair(lon, lat)) break;
+        features.push({
+          type: "Feature",
+          properties: props,
+          geometry: { type: "Point", coordinates: [lon, lat] },
+        });
+        break;
+      }
+      case "MultiPoint":
+        geometry.coordinates.forEach((coord) => {
+          if (!coord || coord.length < 2) return;
+          const [lon, lat] = coord;
+          if (!isValidLonLatPair(lon, lat)) return;
+          features.push({
+            type: "Feature",
+            properties: props,
+            geometry: { type: "Point", coordinates: [lon, lat] },
+          });
+        });
         break;
       case "GeometryCollection":
         geometry.geometries.forEach((g) => extract(g, props));
@@ -578,7 +607,32 @@ function BerryCard({ onRouteImport, onRouteSwitchToBerry, isDrawing, onDrawStart
 
 /* ── Main component ───────────────────────────────────────────────────────── */
 
-export function Sidebar({ plan, segments, points, open, onToggle, onRouteImport, onRouteSwitchToBerry, isDrawing, onDrawStart, onDrawFinish, isCockpit, isOffshore, polarData, maritimeLayers, simulationMode, onSimulationToggle, legContext, onNext, canNext, onPrev, canPrev }) {
+export function Sidebar({
+  plan,
+  segments,
+  points,
+  open,
+  onToggle,
+  onRouteImport,
+  onRouteSwitchToBerry,
+  isDrawing,
+  onDrawStart,
+  onDrawFinish,
+  isCockpit,
+  isOffshore,
+  polarData,
+  maritimeLayers,
+  hasImportedCustomPoints = false,
+  showImportedProjects = true,
+  onImportedProjectsToggle,
+  simulationMode,
+  onSimulationToggle,
+  legContext,
+  onNext,
+  canNext,
+  onPrev,
+  canPrev,
+}) {
   const { t } = useLang();
   const stats    = plan?.voyage_statistics || {};
   const alerts   = plan?.critical_alerts   || [];
@@ -688,6 +742,31 @@ export function Sidebar({ plan, segments, points, open, onToggle, onRouteImport,
                 );
               })}
               </div>
+              {hasImportedCustomPoints && onImportedProjectsToggle && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={onImportedProjectsToggle}
+                    title={t("layerProjectsTitle")}
+                    className={[
+                      "flex items-center justify-center gap-1 w-full px-1.5 py-1 rounded-full",
+                      "text-[10px] font-semibold transition-all duration-150 select-none",
+                      showImportedProjects
+                        ? "bg-slate-700/80 text-white border border-white/10"
+                        : "bg-slate-800/30 text-white/35 border border-white/5 hover:text-white/60",
+                    ].join(" ")}
+                  >
+                    <div
+                      className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: showImportedProjects ? "#38bdf8" : "transparent",
+                        border: "1.5px solid #38bdf8",
+                      }}
+                    />
+                    {t("layerProjects")}
+                  </button>
+                </div>
+              )}
               {(maritimeLayers.errorZee || maritimeLayers.errorPorts) && (
                 <div className="text-[9px] text-amber-400/90 px-2" title={t("layersApiHint")}>
                   {t("layersStartHint")}

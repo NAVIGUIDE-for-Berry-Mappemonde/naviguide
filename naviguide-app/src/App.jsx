@@ -45,6 +45,32 @@ function setCachedPlan(lang, data) {
 
 const SEGMENT_BATCH_SIZE = 4; // legs fetched in parallel per batch
 
+const EMPTY_FEATURE_COLLECTION = { type: "FeatureCollection", features: [] };
+
+/** Bounding box from LineString + Point features (imported GeoJSON). */
+function bboxFromImportedFeatureCollection(fc) {
+  if (!fc?.features?.length) return null;
+  const coords = [];
+  for (const f of fc.features) {
+    const g = f.geometry;
+    if (!g) continue;
+    if (g.type === "Point" && g.coordinates?.length >= 2) {
+      coords.push(g.coordinates);
+    } else if (g.type === "LineString" && g.coordinates?.length) {
+      g.coordinates.forEach((c) => coords.push(c));
+    }
+  }
+  if (coords.length === 0) return null;
+  const lons = coords.map((c) => c[0]);
+  const lats = coords.map((c) => c[1]);
+  return {
+    minLon: Math.min(...lons),
+    maxLon: Math.max(...lons),
+    minLat: Math.min(...lats),
+    maxLat: Math.max(...lats),
+  };
+}
+
 export default function App() {
   const { lang, t } = useLang();
   const mapRef = useRef(null);
@@ -205,9 +231,30 @@ export default function App() {
 
   // Custom imported route (null = show Berry-Mappemonde default route)
   const [customRoute, setCustomRoute] = useState(null); // GeoJSON FeatureCollection
+  const [showImportedProjects, setShowImportedProjects] = useState(true);
 
-  const handleRouteImport = (geojson) => setCustomRoute(geojson);
-  const handleRouteSwitchToBerry = () => setCustomRoute(null);
+  const customRouteLines = useMemo(() => {
+    if (!customRoute?.features?.length) return EMPTY_FEATURE_COLLECTION;
+    const f = customRoute.features.filter((feat) => feat.geometry?.type === "LineString");
+    return { type: "FeatureCollection", features: f };
+  }, [customRoute]);
+
+  const customRoutePoints = useMemo(() => {
+    if (!customRoute?.features?.length) return EMPTY_FEATURE_COLLECTION;
+    const f = customRoute.features.filter((feat) => feat.geometry?.type === "Point");
+    return { type: "FeatureCollection", features: f };
+  }, [customRoute]);
+
+  const hasImportedCustomPoints = customRoutePoints.features.length > 0;
+
+  const handleRouteImport = (geojson) => {
+    setCustomRoute(geojson);
+    setShowImportedProjects(true);
+  };
+  const handleRouteSwitchToBerry = () => {
+    setCustomRoute(null);
+    setShowImportedProjects(true);
+  };
 
   // ── Drawing mode ────────────────────────────────────────────────────────────
   const [drawingMode, setDrawingMode] = useState(false);
@@ -609,8 +656,9 @@ export default function App() {
     })();
   }, [points]);
 
-  // Fit bounds — once, when all segments have arrived
+  // Fit bounds — once, when all segments have arrived (Berry itinerary; not when custom GeoJSON is shown)
   useEffect(() => {
+    if (customRoute) return;
     if (!mapRef.current || segments.length === 0) return;
     // Only fit once per full load (not on every progressive batch update)
     if (boundsApplied.current) return;
@@ -626,7 +674,19 @@ export default function App() {
       [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
       { padding: 80, duration: 1200 }
     );
-  }, [segments, segProgress]);
+  }, [segments, segProgress, customRoute]);
+
+  // Fit bounds to imported GeoJSON (lines + points) whenever custom route changes
+  useEffect(() => {
+    if (!customRoute || !mapRef.current) return;
+    const bbox = bboxFromImportedFeatureCollection(customRoute);
+    if (!bbox) return;
+    const map = mapRef.current.getMap();
+    map.fitBounds(
+      [[bbox.minLon, bbox.minLat], [bbox.maxLon, bbox.maxLat]],
+      { padding: 80, duration: 1200 }
+    );
+  }, [customRoute]);
 
   // ── Route-click: fetch satellite data for any clicked point on the route ────
   const handleRouteClick = async (e) => {
@@ -680,13 +740,11 @@ export default function App() {
       })),
   };
 
-  const EMPTY_FC = { type: "FeatureCollection", features: [] };
-
   // Hide all existing routes while the user is actively drawing (segments stay in memory)
   const maritimeLines = drawingMode
-    ? EMPTY_FC
+    ? EMPTY_FEATURE_COLLECTION
     : customRoute
-      ? customRoute
+      ? customRouteLines
       : {
           type: "FeatureCollection",
           features: segments
@@ -698,9 +756,9 @@ export default function App() {
         };
 
   const nonMaritimeLines = drawingMode
-    ? EMPTY_FC
+    ? EMPTY_FEATURE_COLLECTION
     : customRoute
-      ? EMPTY_FC
+      ? EMPTY_FEATURE_COLLECTION
       : {
           type: "FeatureCollection",
           features: segments
@@ -710,6 +768,14 @@ export default function App() {
               geometry: { type: "LineString", coordinates: s.coords },
             })),
         };
+
+  const importedProjectsData =
+    showImportedProjects && hasImportedCustomPoints ? customRoutePoints : EMPTY_FEATURE_COLLECTION;
+  const showMaritimeArrows =
+    !drawingMode &&
+    (customRoute
+      ? customRouteLines.features.length > 0
+      : segments.some((s) => !s.nonMaritime && s.coords?.length > 0));
 
   return (
     <div
@@ -731,6 +797,9 @@ export default function App() {
         isOffshore={isOffshore}
         polarData={polarData}
         maritimeLayers={maritimeLayers}
+        hasImportedCustomPoints={hasImportedCustomPoints}
+        showImportedProjects={showImportedProjects}
+        onImportedProjectsToggle={() => setShowImportedProjects((v) => !v)}
         simulationMode={simulationMode}
         onSimulationToggle={() => {
           const entering = !simulationMode;
@@ -886,20 +955,39 @@ export default function App() {
               "line-opacity": 0.9,
             }}
           />
-          <Layer
-            id="maritime-arrows"
-            type="symbol"
-            layout={{
-              "symbol-placement": "line",
-              "symbol-spacing": 100,
-              "icon-image": "arrow",
-              "icon-size": 0.8,
-              "icon-rotation-alignment": "map",
-              "icon-allow-overlap": true,
-              "icon-ignore-placement": true,
-            }}
-          />
+          {showMaritimeArrows && (
+            <Layer
+              id="maritime-arrows"
+              type="symbol"
+              layout={{
+                "symbol-placement": "line",
+                "symbol-spacing": 100,
+                "icon-image": "arrow",
+                "icon-size": 0.8,
+                "icon-rotation-alignment": "map",
+                "icon-allow-overlap": true,
+                "icon-ignore-placement": true,
+              }}
+            />
+          )}
         </Source>
+
+        {/* Imported GeoJSON points (e.g. Blue Intelligence projects) */}
+        {hasImportedCustomPoints && (
+          <Source id="custom-route-points" type="geojson" data={importedProjectsData}>
+            <Layer
+              id="custom-route-points-layer"
+              type="circle"
+              paint={{
+                "circle-radius": 7,
+                "circle-color": "#38bdf8",
+                "circle-opacity": 0.92,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#ffffff",
+              }}
+            />
+          </Source>
+        )}
 
         {/* Lignes non maritimes */}
         <Source id="non-maritime" type="geojson" data={nonMaritimeLines}>
